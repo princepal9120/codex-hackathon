@@ -55,7 +55,7 @@ export default function LandingPage() {
         eyebrow="Repo-aware execution"
         title="Make AI coding runs feel trustworthy"
         description="CodexFlow turns a request into a clear review flow: rank repository context, build a prompt preview, capture a patch artifact, and verify before anyone trusts the result."
-        badge={source === "api" ? "Live pipeline" : "Demo fallback"}
+        badge={source === "api" ? "Live pipeline" : "API unavailable"}
         actions={
           <>
             <Link href="/board">

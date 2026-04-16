@@ -1,5 +1,3 @@
-import { mockTasks } from "@/data/mockTasks";
-
 export type TaskStatus = "queued" | "running" | "passed" | "failed" | "needs_review";
 export type VerificationStatus = "passed" | "failed" | "pending";
 export type TaskSource = "api" | "mock";
@@ -561,17 +559,15 @@ function getTaskPayload(payload: unknown) {
 
 function getMockCollection(message: string): TaskCollectionResult {
   return {
-    tasks: mockTasks.map(normalizeTask),
+    tasks: [],
     source: "mock",
     message,
   };
 }
 
-function getMockDetail(id: string, message: string): TaskDetailResult {
-  const task = mockTasks.find((entry) => entry.id === id);
-
+function getMockDetail(_id: string, message: string): TaskDetailResult {
   return {
-    task: task ? normalizeTask(task) : null,
+    task: null,
     source: "mock",
     message,
   };
@@ -613,7 +609,7 @@ export async function createTask(input: CreateTaskInput): Promise<TaskRecord> {
 }
 
 export async function retryTask(taskId: string): Promise<TaskRecord> {
-  const payload = await fetchJson(`/api/tasks/${taskId}`, {
+  const payload = await fetchJson(`/api/tasks/${taskId}/retry`, {
     method: "POST",
   });
 

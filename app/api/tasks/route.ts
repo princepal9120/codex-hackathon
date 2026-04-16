@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { loadCodexFlowConfig, validateCreateTaskInput } from "@/lib/config";
 import { queueTaskExecution } from "@/lib/server/run-task";
 import { createTask, listTasks } from "@/lib/server/task-store";
 import type { CreateTaskInput } from "@/lib/task-types";
@@ -26,13 +27,17 @@ export async function POST(request: Request) {
   const input = normalizeInput(await request.json());
 
   if (!input.title.trim() || !input.prompt.trim()) {
-    return NextResponse.json(
-      { error: "Title and prompt are required." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Title and prompt are required." }, { status: 400 });
   }
 
-  const task = createTask(input);
+  const config = loadCodexFlowConfig();
+  const validation = validateCreateTaskInput(input, config);
+
+  if (validation.errors.length > 0) {
+    return NextResponse.json({ error: validation.errors.join(" ") }, { status: 400 });
+  }
+
+  const task = createTask(validation.input);
   queueTaskExecution(task.id);
   return NextResponse.json({ task }, { status: 201 });
 }

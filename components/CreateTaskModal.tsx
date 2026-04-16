@@ -139,7 +139,7 @@ export default function CreateTaskModal({ open, onOpenChange }: CreateTaskModalP
                 </div>
 
                 <div className="grid gap-5">
-                  <Field label="Repository path" helper="Relative path used by the repo scanner and task runner.">
+                  <Field label="Repository path" helper="Relative path used by the repo scanner and task runner. The server keeps execution inside the configured repository root.">
                     <Input
                       id="task-repo-path"
                       type="text"
@@ -150,22 +150,22 @@ export default function CreateTaskModal({ open, onOpenChange }: CreateTaskModalP
                   </Field>
 
                   <div className="grid gap-5 md:grid-cols-2">
-                    <Field label="Lint command" helper="Optional command shown in verification evidence.">
+                    <Field label="Lint command" helper="Server-safe command from codexflow.config.json. Arbitrary commands are not accepted.">
                       <Input
                         id="task-lint-command"
                         type="text"
                         placeholder="npm run lint"
                         value={form.lintCommand}
-                        onChange={(event) => updateField("lintCommand", event.target.value)}
+                        readOnly
                       />
                     </Field>
-                    <Field label="Test command" helper="Optional command for execution-time verification.">
+                    <Field label="Test command" helper="Server-safe command from codexflow.config.json. Arbitrary commands are not accepted.">
                       <Input
                         id="task-test-command"
                         type="text"
                         placeholder="npm test"
                         value={form.testCommand}
-                        onChange={(event) => updateField("testCommand", event.target.value)}
+                        readOnly
                       />
                     </Field>
                   </div>

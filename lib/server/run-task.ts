@@ -47,21 +47,73 @@ function mergeTimeline(base: TaskEvent[], additions: TaskEvent[]) {
   return merged.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
 
+function humanizeStep(step: string) {
+  return step
+    .split(/[_-]/g)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function mapEngineStep(step: string | undefined) {
+  switch (step) {
+    case "task_received":
+      return { phase: "task", kind: "task_created", title: "Task received" } as const;
+    case "scan_repository":
+      return { phase: "context", kind: "context_selected", title: "Repository scanned" } as const;
+    case "rank_files":
+      return { phase: "context", kind: "context_selected", title: "Files ranked" } as const;
+    case "build_prompt":
+      return { phase: "context", kind: "context_selected", title: "Prompt built" } as const;
+    case "generate_patch_preview":
+      return { phase: "execution", kind: "patch_generated", title: "Patch preview generated" } as const;
+    case "verify_lint":
+      return { phase: "verification", kind: "verification_completed", title: "Lint verification" } as const;
+    case "verify_tests":
+      return { phase: "verification", kind: "verification_completed", title: "Test verification" } as const;
+    case "finalize":
+      return { phase: "task", kind: "run_completed", title: "Run finalized" } as const;
+    case "engine_failure":
+      return { phase: "task", kind: "run_failed", title: "Engine failure" } as const;
+    default:
+      return null;
+  }
+}
+
 function normalizeTimelineEvent(entry: unknown): TaskEvent | null {
   if (!entry || typeof entry !== "object") {
     return null;
   }
 
   const record = entry as Record<string, unknown>;
-  const title = typeof record.title === "string" ? record.title : "Task update";
+  const engineStep = typeof record.step === "string" ? record.step : undefined;
+  const engineMapping = mapEngineStep(engineStep);
+  const title =
+    (typeof record.title === "string" && record.title) ||
+    engineMapping?.title ||
+    (engineStep ? humanizeStep(engineStep) : "Task update");
   const detail =
     (typeof record.detail === "string" && record.detail) ||
     (typeof record.message === "string" && record.message) ||
+    (typeof record.summary === "string" && record.summary) ||
     "No additional detail captured.";
   const createdAt =
     (typeof record.createdAt === "string" && record.createdAt) ||
     (typeof record.created_at === "string" && record.created_at) ||
+    (typeof record.at === "string" && record.at) ||
     new Date().toISOString();
+  const level =
+    record.level === "info" ||
+    record.level === "success" ||
+    record.level === "warning" ||
+    record.level === "error"
+      ? record.level
+      : record.status === "failed"
+        ? "error"
+        : record.status === "warning"
+          ? "warning"
+          : record.status === "completed"
+            ? "success"
+            : "info";
 
   return createEvent({
     id: typeof record.id === "string" ? record.id : undefined,
@@ -71,7 +123,7 @@ function normalizeTimelineEvent(entry: unknown): TaskEvent | null {
       record.phase === "execution" ||
       record.phase === "verification"
         ? record.phase
-        : "execution",
+        : engineMapping?.phase ?? "execution",
     kind:
       record.kind === "task_created" ||
       record.kind === "task_requeued" ||
@@ -82,21 +134,17 @@ function normalizeTimelineEvent(entry: unknown): TaskEvent | null {
       record.kind === "run_completed" ||
       record.kind === "run_failed"
         ? record.kind
-        : "run_completed",
-    level:
-      record.level === "info" ||
-      record.level === "success" ||
-      record.level === "warning" ||
-      record.level === "error"
-        ? record.level
-        : "info",
+        : engineMapping?.kind ?? "run_completed",
+    level,
     title,
     detail,
     createdAt,
     metadata:
       record.metadata && typeof record.metadata === "object"
         ? (record.metadata as TaskEvent["metadata"])
-        : undefined,
+        : record.details && typeof record.details === "object"
+          ? (record.details as TaskEvent["metadata"])
+          : undefined,
   });
 }
 
@@ -104,6 +152,7 @@ function normalizeResultTimeline(result: RunTaskResult, finishedAt: string): Tas
   const candidateLists = [
     (result as RunTaskResult & { timeline?: unknown }).timeline,
     (result as RunTaskResult & { executionTimeline?: unknown }).executionTimeline,
+    (result as RunTaskResult & { executionHistory?: unknown }).executionHistory,
     (result as RunTaskResult & { history?: unknown }).history,
     (result as RunTaskResult & { events?: unknown }).events,
   ];

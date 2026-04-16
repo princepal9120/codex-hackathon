@@ -29,6 +29,7 @@ CodexFlow is a clean, technical interface for AI coding task execution that make
 - Visual explanation of how it works
 - Sample task execution preview
 - Call-to-action buttons
+- Live board and task-detail routes wired to the task API
 
 ### Task Board
 - 5-column Kanban view: Queued, Running, Passed, Failed, Needs Review
@@ -50,8 +51,8 @@ CodexFlow is a clean, technical interface for AI coding task execution that make
   - Task title
   - Task prompt
   - Repository path
-  - Optional lint command
-  - Optional test command
+  - Safe lint command preview
+  - Safe test command preview
 
 ## Getting Started
 
@@ -87,36 +88,20 @@ That guide covers:
 ### Project Structure
 
 ```
-├── app/                    # Next.js App Router pages
-│   ├── layout.tsx         # Root layout with navbar
-│   ├── globals.css        # Global styles
-│   ├── page.tsx           # Landing page
-│   ├── board/
-│   │   └── page.tsx       # Task board page
-│   └── tasks/[id]/
-│       └── page.tsx       # Task detail page
-├── components/
-│   ├── ui/                # Base UI components
-│   │   ├── Button.tsx
-│   │   ├── Badge.tsx
-│   │   ├── Dialog.tsx
-│   │   └── Input.tsx
-│   ├── Navbar.tsx         # App shell navbar
-│   ├── TaskCard.tsx       # Individual task card
-│   ├── TaskColumn.tsx     # Board column
-│   ├── CreateTaskModal.tsx # Task creation dialog
-│   ├── FileListPanel.tsx  # Selected files display
-│   ├── DiffPanel.tsx      # Code diff viewer
-│   ├── VerificationPanel.tsx # Lint/test status
-│   ├── ScoreCard.tsx      # Score display
-│   └── StatusBadge.tsx    # Status badge component
-├── lib/
-│   └── utils.ts           # Utility functions
-├── data/
-│   └── mockTasks.ts       # Mock task data
+├── app/                         # Next.js App Router pages + API routes
+│   ├── api/tasks/               # Task list/detail/run/retry/timeline endpoints
+│   ├── board/page.tsx           # Live task board route
+│   ├── tasks/[id]/page.tsx      # Live task detail route
+│   ├── onboarding/page.tsx      # Operator onboarding route
+│   └── page.tsx                 # Landing page
+├── components/                  # Shared UI and task-detail panels
+├── engine/                      # Python execution engine (scan/rank/prompt/verify)
+├── features/dashboard/          # Board + task detail client views
+├── lib/server/                  # SQLite task persistence + execution queue
+├── data/                        # SQLite database files
+├── codexflow.config.json        # Safe repo + verification command config
 ├── package.json
-├── tailwind.config.ts
-└── tsconfig.json
+└── tests/                       # Python engine tests
 ```
 
 ## Color Scheme
@@ -152,20 +137,14 @@ npm run lint     # Run ESLint
 
 ### Adding New Features
 
-1. Create components in `/components`
+1. Create or extend components in `/components` or `features/dashboard`
 2. Use the Button, Badge, Dialog, and Input UI components
-3. Add mock data to `/data/mockTasks.ts`
-4. Create pages in `/app` following Next.js conventions
+3. Keep new task flows wired to the real `/api/tasks` endpoints
+4. Keep verification commands server-controlled via `codexflow.config.json`
 
-## Mock Data
+## Seed Data
 
-The application comes with pre-configured mock tasks demonstrating:
-- Different task statuses (queued, running, passed, failed, needs_review)
-- Various score levels
-- File selections with relevance scores
-- Sample code diffs
-- Lint and test verification results
-- Execution logs
+The app seeds a small set of SQLite-backed sample tasks for the demo board. New tasks are created through the live API and run through the Python execution engine with patch previews, verification output, and timeline events.
 
 ## Future Enhancements
 
