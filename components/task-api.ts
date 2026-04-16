@@ -15,6 +15,8 @@ export type TaskTimelineEventKind =
 export type TaskTimelineEventLevel = "info" | "success" | "warning" | "error";
 export type FailureClassification = "verification" | "execution" | "empty_patch" | "unknown";
 
+export const TASK_REFRESH_INTERVAL_MS = 5000;
+
 export interface TaskTimelineEvent {
   id: string;
   phase: TaskTimelineEventPhase;
@@ -610,6 +612,14 @@ export async function createTask(input: CreateTaskInput): Promise<TaskRecord> {
 
 export async function retryTask(taskId: string): Promise<TaskRecord> {
   const payload = await fetchJson(`/api/tasks/${taskId}/retry`, {
+    method: "POST",
+  });
+
+  return normalizeTask(getTaskPayload(payload));
+}
+
+export async function runTask(taskId: string): Promise<TaskRecord> {
+  const payload = await fetchJson(`/api/tasks/${taskId}/run`, {
     method: "POST",
   });
 
