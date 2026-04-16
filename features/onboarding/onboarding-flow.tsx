@@ -21,28 +21,43 @@ import {
 import {
   createTask,
   getTaskIdentifier,
+  getTaskKindLabel,
   type CreateTaskInput,
   type TaskRecord,
+  type TaskKind,
 } from "@/components/task-api";
+import { createProject, fetchProjects, type ProjectRecord } from "@/components/project-api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { cn } from "@/lib/utils";
 
 const steps = [
-  { label: "Workspace", title: "Frame the repo" },
+  { label: "Project", title: "Frame the repo" },
   { label: "Verification", title: "Lock the proof path" },
-  { label: "First task", title: "Shape the request" },
+  { label: "First item", title: "Shape the request" },
   { label: "Launch", title: "Create the starter run" },
 ] as const;
 
+const installCommands = [
+  { label: "Check whether Multica is already installed", command: "multica version" },
+  { label: "Install Multica with Homebrew", command: "brew install multica-ai/tap/multica" },
+  { label: "Verify the Codex CLI is available", command: "codex --help" },
+] as const;
+
 const runtimeCommands = [
-  { label: "Verify Codex CLI", command: "codex --help" },
-  { label: "Verify Multica CLI", command: "multica --help" },
-  { label: "Connect the runtime", command: "multica setup" },
+  { label: "Fastest path: configure + authenticate + start daemon", command: "multica setup" },
+  { label: "Authenticate manually", command: "multica login" },
+  { label: "Start the daemon manually", command: "multica daemon start" },
+  { label: "Confirm daemon status and detected agents", command: "multica daemon status" },
 ] as const;
 
 const detectedTools = ["Next.js 14", "TypeScript", "Python", "SQLite", "Codex"] as const;
+const troubleshootingCommands = [
+  { label: "Check current auth state", command: "multica auth status" },
+  { label: "Restart daemon if Codex was not detected", command: "multica daemon stop && multica daemon start" },
+] as const;
+
 const optionalCliOverrides = [
   'export MULTICA_CODEX_PATH="$(which codex)"',
   'export MULTICA_CODEX_MODEL="gpt-5.4"',
@@ -57,6 +72,7 @@ const starterTemplates = [
     prompt:
       "Improve the failed-state experience on the task detail page. Keep the diff preview primary, make the retry path clearer, and preserve the existing API contract. Verification should prove the UI still builds cleanly.",
     outcome: "Great for a first end-to-end run that exercises the core review loop.",
+    taskKind: "issue" as TaskKind,
   },
   {
     id: "feature-polish",
@@ -66,6 +82,7 @@ const starterTemplates = [
     prompt:
       "Add a clearer summary of why files were selected for a task, surface it on the board or task detail where it improves scanability, and keep the interface serious and proof-oriented. Verify the result with the configured checks.",
     outcome: "Highlights CodexFlow's repo-aware context differentiator immediately.",
+    taskKind: "task" as TaskKind,
   },
   {
     id: "bug-fix",
@@ -75,6 +92,17 @@ const starterTemplates = [
     prompt:
       "Investigate the task detail loading state so background refreshes do not flash stale or contradictory information. Keep the existing routes and API helpers intact, and verify the change with lint and tests.",
     outcome: "Useful when you want the first run to look like a real production bug investigation.",
+    taskKind: "issue" as TaskKind,
+  },
+  {
+    id: "operator-report",
+    name: "Operator report",
+    description: "Write or refine onboarding guidance so the Multica + Codex handoff feels concrete and operational.",
+    title: "Document the Multica + Codex onboarding path for repo operators",
+    prompt:
+      "Create or refine onboarding guidance so repo operators can verify the Codex CLI, install Multica if needed, log in, start the daemon, and understand how CodexFlow hands off into the board and task-detail review flow. Keep the output serious, concrete, and proof-oriented.",
+    outcome: "Best when you want the first run to look like an operator-facing report or docs deliverable.",
+    taskKind: "report" as TaskKind,
   },
 ] as const;
 
@@ -87,12 +115,13 @@ const safeDefaults = {
 export default function OnboardingFlow() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [workspaceName, setWorkspaceName] = useState("CodexFlow workspace");
+  const [projectName, setProjectName] = useState("CodexFlow onboarding");
   const [repoPath, setRepoPath] = useState(safeDefaults.repoPath);
-  const [operatorRole, setOperatorRole] = useState("Repo operator");
+  const [reviewOwner, setReviewOwner] = useState("Repo operator");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(starterTemplates[0].id);
   const [taskTitle, setTaskTitle] = useState<string>(starterTemplates[0].title);
   const [taskPrompt, setTaskPrompt] = useState<string>(starterTemplates[0].prompt);
+  const [createdProject, setCreatedProject] = useState<ProjectRecord | null>(null);
   const [createdTask, setCreatedTask] = useState<TaskRecord | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -102,8 +131,14 @@ export default function OnboardingFlow() {
     [selectedTemplateId]
   );
 
-  const canAdvanceWorkspace = workspaceName.trim().length > 0 && repoPath.trim().length > 0 && operatorRole.trim().length > 0;
+  const canAdvanceProject = projectName.trim().length > 0 && repoPath.trim().length > 0 && reviewOwner.trim().length > 0;
   const canAdvanceTask = taskTitle.trim().length > 0 && taskPrompt.trim().length > 0;
+
+  const resetLaunchResult = () => {
+    setCreatedProject(null);
+    setCreatedTask(null);
+    setSubmitError(null);
+  };
 
   const handleTemplateSelect = (templateId: string) => {
     const template = starterTemplates.find((item) => item.id === templateId);
@@ -112,7 +147,7 @@ export default function OnboardingFlow() {
     setSelectedTemplateId(template.id);
     setTaskTitle(template.title);
     setTaskPrompt(template.prompt);
-    setSubmitError(null);
+    resetLaunchResult();
   };
 
   const goNext = () => {
@@ -134,14 +169,36 @@ export default function OnboardingFlow() {
     setSubmitError(null);
 
     try {
+      const normalizedProjectName = projectName.trim();
+      const normalizedRepoPath = repoPath.trim() || safeDefaults.repoPath;
+      const onboardingProjectDescription = `Onboarding project for ${reviewOwner.trim()} created from the guided CodexFlow setup flow.`;
+
+      let project =
+        (await fetchProjects()).find(
+          (candidate) =>
+            candidate.name.toLowerCase() === normalizedProjectName.toLowerCase() &&
+            candidate.repoPath === normalizedRepoPath
+        ) ?? null;
+
+      if (!project) {
+        project = await createProject({
+          name: normalizedProjectName,
+          repoPath: normalizedRepoPath,
+          description: onboardingProjectDescription,
+        });
+      }
+
       const task = await createTask({
         title: taskTitle.trim(),
         prompt: taskPrompt.trim(),
-        repoPath: repoPath.trim() || safeDefaults.repoPath,
+        projectId: project.id,
+        taskKind: selectedTemplate.taskKind,
+        repoPath: normalizedRepoPath,
         lintCommand: safeDefaults.lintCommand,
         testCommand: safeDefaults.testCommand,
       });
 
+      setCreatedProject(project);
       setCreatedTask(task);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Failed to create the starter task.");
@@ -160,7 +217,8 @@ export default function OnboardingFlow() {
           </h1>
           <p className="mt-5 max-w-xl text-base leading-8 text-[#5f6b78]">
             This onboarding wizard borrows Multica&apos;s step-by-step structure, but it is tuned for CodexFlow&apos;s
-            real workflow: repo scope, verification defaults, first-task shaping, and a clean handoff into review.
+            real workflow: project setup, repo scope, verification defaults, first-item shaping, and a clean handoff
+            into review.
           </p>
 
           <div className="mt-7 flex flex-wrap gap-3">
@@ -209,7 +267,7 @@ export default function OnboardingFlow() {
           <div className="mt-8 rounded-[1.6rem] border border-[#e6ded3] bg-[#fcfaf6] p-5">
             <p className="font-mono-ui text-[0.68rem] uppercase tracking-[0.24em] text-[#8b8378]">Runtime cues</p>
             <div className="mt-4 space-y-3">
-              {runtimeCommands.map((item) => (
+              {installCommands.slice(0, 2).map((item) => (
                 <div key={item.command} className="rounded-[1.2rem] border border-[#e6ded3] bg-white px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-[#8b8378]">{item.label}</p>
                   <code className="mt-2 block font-mono-ui text-sm text-[#1f1c17]">{item.command}</code>
@@ -235,29 +293,50 @@ export default function OnboardingFlow() {
           {step === 0 ? (
             <StepShell
               eyebrow="Step 1"
-              title="Frame the repository and operator context"
-              description="Multica starts by anchoring the workspace. Here, we anchor the repo target and the human who will judge the run."
+              title="Create the CodexFlow project context"
+              description="Multica starts by anchoring the workspace. Here, we anchor the project, the repo target, and the human who will judge the first run."
             >
               <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-5">
-                  <Field label="Workspace label" helper="Used only inside the onboarding summary so the setup feels concrete.">
-                    <Input value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} placeholder="CodexFlow workspace" />
+                  <Field label="Project name" helper="This is persisted as a real CodexFlow project before the starter item is created.">
+                    <Input
+                      value={projectName}
+                      onChange={(event) => {
+                        setProjectName(event.target.value);
+                        resetLaunchResult();
+                      }}
+                      placeholder="CodexFlow onboarding"
+                    />
                   </Field>
                   <Field label="Repository path" helper="Must stay inside the configured repo root. Use `.` for the current project.">
-                    <Input value={repoPath} onChange={(event) => setRepoPath(event.target.value)} placeholder="." />
+                    <Input
+                      value={repoPath}
+                      onChange={(event) => {
+                        setRepoPath(event.target.value);
+                        resetLaunchResult();
+                      }}
+                      placeholder="."
+                    />
                   </Field>
-                  <Field label="Operator role" helper="Who is responsible for reviewing the patch preview and verification evidence?">
-                    <Input value={operatorRole} onChange={(event) => setOperatorRole(event.target.value)} placeholder="Repo operator" />
+                  <Field label="Review owner" helper="Who is responsible for reviewing the patch preview and verification evidence?">
+                    <Input
+                      value={reviewOwner}
+                      onChange={(event) => {
+                        setReviewOwner(event.target.value);
+                        resetLaunchResult();
+                      }}
+                      placeholder="Repo operator"
+                    />
                   </Field>
                 </div>
 
                 <InfoPanel
                   title="What this step controls"
-                  body="CodexFlow does not create a collaboration workspace here. It establishes the repo target, the review owner, and the context for the starter task you are about to launch."
+                  body="CodexFlow creates or reuses a real project here, then attaches the starter issue, report, or implementation task to that project before handing off into the board."
                   items={[
-                    "Scope the task runner to the right repo root.",
+                    "Scope the first run to the right repo root.",
                     "Keep the review owner explicit from the start.",
-                    "Preserve a serious, proof-oriented setup tone.",
+                    "Make the onboarding handoff land in a project-backed workflow, not a disconnected demo.",
                   ]}
                 />
               </div>
@@ -266,7 +345,7 @@ export default function OnboardingFlow() {
                 <Link href="/">
                   <Button variant="ghost">Cancel</Button>
                 </Link>
-                <Button onClick={goNext} disabled={!canAdvanceWorkspace} className="gap-2">
+                <Button onClick={goNext} disabled={!canAdvanceProject} className="gap-2">
                   Continue to verification
                   <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -278,7 +357,7 @@ export default function OnboardingFlow() {
             <StepShell
               eyebrow="Step 2"
               title="Lock the proof path before the first run"
-              description="Multica uses this step to connect a runtime. CodexFlow uses it to make the verification contract explicit before any patch preview earns trust."
+              description="This mirrors Multica&apos;s CLI_INSTALL + CLI_AND_DAEMON flow: verify the CLIs, authenticate, start the daemon, and make the proof path explicit before any patch preview earns trust."
             >
               <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
                 <div className="space-y-4">
@@ -323,31 +402,39 @@ export default function OnboardingFlow() {
                 <div className="rounded-[1.5rem] border border-[#e6ded3] bg-white p-5 shadow-sm">
                   <div className="flex items-center gap-2 text-[#746b60]">
                     <Terminal className="h-4 w-4" />
-                    <p className="text-[0.68rem] uppercase tracking-[0.24em]">Multica-style CLI handoff</p>
+                    <p className="text-[0.68rem] uppercase tracking-[0.24em]">Install + connect the runtime</p>
                   </div>
                   <div className="mt-4 space-y-3">
-                    {runtimeCommands.map((item, index) => (
+                    {installCommands.map((item, index) => (
                       <CommandBlock key={item.command} label={`${index + 1}. ${item.label}`} command={item.command} />
+                    ))}
+                    {runtimeCommands.map((item, index) => (
+                      <CommandBlock key={item.command} label={`${index + installCommands.length + 1}. ${item.label}`} command={item.command} />
                     ))}
                   </div>
                   <p className="mt-4 text-sm leading-6 text-[#6f675d]">
-                    This mirrors Multica&apos;s onboarding rhythm: verify the CLIs, run the single setup command, then let the board/detail flow prove the result inside CodexFlow.
+                    This mirrors Multica&apos;s onboarding rhythm directly: check the CLI, install if needed, authenticate,
+                    start the daemon, confirm detected agents, then let the CodexFlow board/detail flow prove the handoff.
                   </p>
                 </div>
 
                 <div className="rounded-[1.5rem] border border-[#e6ded3] bg-[#faf6f0] p-5">
                   <div className="flex items-center gap-2 text-[#746b60]">
                     <Bot className="h-4 w-4" />
-                    <p className="text-[0.68rem] uppercase tracking-[0.24em]">Optional Codex overrides</p>
+                    <p className="text-[0.68rem] uppercase tracking-[0.24em]">Troubleshooting + Codex overrides</p>
                   </div>
                   <div className="mt-4 space-y-3">
+                    {troubleshootingCommands.map((item) => (
+                      <CommandBlock key={item.command} label={item.label} command={item.command} subtle />
+                    ))}
                     {optionalCliOverrides.map((command) => (
                       <CommandBlock key={command} label="Optional environment override" command={command} subtle />
                     ))}
                   </div>
                   <div className="mt-5 space-y-3">
-                    <ChecklistRow>Use `multica setup` when you want the same fast setup flow as Multica.</ChecklistRow>
-                    <ChecklistRow>Use CodexFlow&apos;s starter task to prove repo context, prompt preview, and verification in one pass.</ChecklistRow>
+                    <ChecklistRow>`multica setup` is the fastest path when you want the exact Cloud quickstart flow from Multica.</ChecklistRow>
+                    <ChecklistRow>If `codex` is missing from daemon status, restart the daemon after fixing PATH or `MULTICA_CODEX_PATH`.</ChecklistRow>
+                    <ChecklistRow>Use CodexFlow&apos;s starter item to prove repo context, prompt preview, and verification in one pass.</ChecklistRow>
                   </div>
                 </div>
               </div>
@@ -368,8 +455,8 @@ export default function OnboardingFlow() {
           {step === 2 ? (
             <StepShell
               eyebrow="Step 3"
-              title="Shape the first request like a real operator"
-              description="Instead of creating an agent like Multica, CodexFlow lets you choose a starter task pattern, then edit the exact request that will drive context selection and verification."
+              title="Shape the first work item like a real operator"
+              description="Instead of creating an agent like Multica, CodexFlow lets you choose a starter issue, task, or report pattern, then edit the exact request that will drive context selection and verification."
             >
               <div className="space-y-6">
                 <div className="grid gap-4 lg:grid-cols-3">
@@ -392,7 +479,10 @@ export default function OnboardingFlow() {
                           <p className="text-sm font-semibold">{template.name}</p>
                           {isSelected ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4 text-[#8b8378]" />}
                         </div>
-                        <p className={cn("mt-3 text-sm leading-6", isSelected ? "text-white/82" : "text-[#6f675d]")}>{template.description}</p>
+                        <p className={cn("mt-3 text-[10px] font-semibold uppercase tracking-[0.18em]", isSelected ? "text-white/65" : "text-[#8b8378]")}>
+                          {getTaskKindLabel(template.taskKind)}
+                        </p>
+                        <p className={cn("mt-2 text-sm leading-6", isSelected ? "text-white/82" : "text-[#6f675d]")}>{template.description}</p>
                         <p className={cn("mt-4 text-xs leading-5", isSelected ? "text-white/65" : "text-[#8b8378]")}>{template.outcome}</p>
                       </button>
                     );
@@ -401,11 +491,25 @@ export default function OnboardingFlow() {
 
                 <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
                   <div className="space-y-5">
-                    <Field label="Task title" helper="Short board-facing summary for the first run.">
-                      <Input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Improve the failed-state review path" />
+                    <Field label={`${getTaskKindLabel(selectedTemplate.taskKind)} title`} helper="Short board-facing summary for the first run.">
+                      <Input
+                        value={taskTitle}
+                        onChange={(event) => {
+                          setTaskTitle(event.target.value);
+                          resetLaunchResult();
+                        }}
+                        placeholder="Improve the failed-state review path"
+                      />
                     </Field>
-                    <Field label="Task prompt" helper="Describe the behavior, constraints, and what good verification should prove.">
-                      <Textarea value={taskPrompt} onChange={(event) => setTaskPrompt(event.target.value)} placeholder="Explain what the first run should improve and how trust should be earned." />
+                    <Field label={`${getTaskKindLabel(selectedTemplate.taskKind)} prompt`} helper="Describe the behavior, constraints, and what good verification should prove.">
+                      <Textarea
+                        value={taskPrompt}
+                        onChange={(event) => {
+                          setTaskPrompt(event.target.value);
+                          resetLaunchResult();
+                        }}
+                        placeholder="Explain what the first run should improve and how trust should be earned."
+                      />
                     </Field>
                   </div>
 
@@ -413,8 +517,9 @@ export default function OnboardingFlow() {
                     title="Starter template summary"
                     body={selectedTemplate.outcome}
                     items={[
-                      `Workspace: ${workspaceName}`,
-                      `Review owner: ${operatorRole}`,
+                      `Project: ${projectName}`,
+                      `Item type: ${getTaskKindLabel(selectedTemplate.taskKind)}`,
+                      `Review owner: ${reviewOwner}`,
                       `Repo target: ${repoPath || "."}`,
                     ]}
                   />
@@ -441,20 +546,26 @@ export default function OnboardingFlow() {
               description={
                 createdTask
                   ? "The onboarding flow now hands off into the exact board and task-detail surfaces that make CodexFlow useful."
-                  : "Review the exact task payload that will be sent to the API, then create the starter run explicitly."
+                  : "Review the exact project-backed payload that will be sent to the API, then create the starter run explicitly."
               }
             >
               <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
                 <div className="space-y-4">
                   <ReadonlyStat
                     icon={<Workflow className="h-4 w-4" />}
-                    label="Workspace"
-                    value={workspaceName.trim()}
-                    helper={`Reviewed by ${operatorRole.trim()}`}
+                    label="Project"
+                    value={projectName.trim()}
+                    helper={`Reviewed by ${reviewOwner.trim()}`}
+                  />
+                  <ReadonlyStat
+                    icon={<Sparkles className="h-4 w-4" />}
+                    label="Item type"
+                    value={getTaskKindLabel(selectedTemplate.taskKind)}
+                    helper="Starter template controls whether the first run lands as an issue, task, or report."
                   />
                   <ReadonlyStat
                     icon={<FileSearch className="h-4 w-4" />}
-                    label="Task title"
+                    label={`${getTaskKindLabel(selectedTemplate.taskKind)} title`}
                     value={taskTitle.trim()}
                     helper="This is the board-facing summary for the starter run."
                   />
@@ -467,8 +578,8 @@ export default function OnboardingFlow() {
                 <div className="rounded-[1.5rem] border border-[#e6ded3] bg-[#faf6f0] p-5">
                   <p className="font-mono-ui text-[0.68rem] uppercase tracking-[0.24em] text-[#8b8378]">What happens next</p>
                   <div className="mt-5 space-y-3">
-                    <ChecklistRow>Task is created through the existing `/api/tasks` backend contract.</ChecklistRow>
-                    <ChecklistRow>CodexFlow selects relevant files and builds a prompt preview.</ChecklistRow>
+                    <ChecklistRow>The onboarding flow creates or reuses a real project through `/api/projects` before launching the first work item.</ChecklistRow>
+                    <ChecklistRow>CodexFlow selects relevant files, builds a prompt preview, and records the exact work item type.</ChecklistRow>
                     <ChecklistRow>Patch preview, verification evidence, and score show up in the board/detail flow.</ChecklistRow>
                   </div>
 
@@ -484,7 +595,7 @@ export default function OnboardingFlow() {
                   <div className="mt-4 rounded-[1.25rem] border border-[#e3ddd2] bg-white px-4 py-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-[#8b8378]">CLI checkpoints</p>
                     <div className="mt-3 space-y-2">
-                      {runtimeCommands.map((item) => (
+                      {[...installCommands.slice(0, 1), ...runtimeCommands.slice(0, 3)].map((item) => (
                         <CommandBlock key={item.command} label={item.label} command={item.command} compact />
                       ))}
                     </div>
@@ -508,8 +619,8 @@ export default function OnboardingFlow() {
                       <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[#4b8a78]">Task created</p>
                       <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[#184b40]">{getTaskIdentifier(createdTask.id)}</h3>
                       <p className="mt-3 text-sm leading-7 text-[#326457]">
-                        {createdTask.title} is now queued in the live pipeline. Open the board for the system view or jump
-                        directly into task detail to inspect prompt preview, diff, and verification evidence.
+                        {createdTask.title} is now queued in the live pipeline as a {getTaskKindLabel(createdTask.taskKind).toLowerCase()} in{" "}
+                        {createdProject?.name ?? "the selected project"}. Open the board for the system view or jump directly into task detail to inspect prompt preview, diff, and verification evidence.
                       </p>
                       <div className="mt-5 flex flex-wrap gap-3">
                         <Button className="gap-2" onClick={() => router.push(`/tasks/${createdTask.id}`)}>
@@ -519,12 +630,16 @@ export default function OnboardingFlow() {
                         <Link href="/board">
                           <Button variant="outline">Open board</Button>
                         </Link>
+                        <Link href="/projects">
+                          <Button variant="outline">Open projects</Button>
+                        </Link>
                       </div>
                       <div className="mt-5 rounded-[1.2rem] border border-[#d4ebe3] bg-white px-4 py-4 text-sm text-[#3f5f56]">
                         <div className="flex items-center gap-2">
                           <Bot className="h-4 w-4" />
                           <span>Status: {createdTask.status.replace("_", " ")}</span>
                         </div>
+                        {createdProject ? <p className="mt-2">Project: {createdProject.name}</p> : null}
                       </div>
                     </div>
                   </div>
@@ -538,7 +653,7 @@ export default function OnboardingFlow() {
                 </Button>
                 {createdTask ? null : (
                   <Button onClick={handleCreateStarterTask} disabled={!canAdvanceTask || isSubmitting} className="gap-2">
-                    {isSubmitting ? "Creating starter task…" : "Create starter task"}
+                    {isSubmitting ? `Creating starter ${getTaskKindLabel(selectedTemplate.taskKind).toLowerCase()}…` : `Create starter ${getTaskKindLabel(selectedTemplate.taskKind).toLowerCase()}`}
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 )}
