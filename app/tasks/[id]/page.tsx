@@ -9,7 +9,7 @@ import FileListPanel from "@/components/FileListPanel";
 import DiffPanel from "@/components/DiffPanel";
 import VerificationPanel from "@/components/VerificationPanel";
 import ScoreCard from "@/components/ScoreCard";
-import { fetchTask, formatTaskTimestamp, isTerminalStatus, type TaskRecord, type TaskSource } from "@/components/task-api";
+import { fetchTask, formatTaskTimestamp, isTerminalStatus, retryTask, type TaskRecord, type TaskSource } from "@/components/task-api";
 
 interface TaskPageProps {
   params: {
@@ -23,6 +23,7 @@ export default function TaskPage({ params }: TaskPageProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const loadTask = useCallback(async (background = false) => {
     if (background) {
@@ -54,6 +55,26 @@ export default function TaskPage({ params }: TaskPageProps) {
 
     return () => window.clearInterval(interval);
   }, [loadTask, source, task]);
+
+  const handleRetry = async () => {
+    if (!task || retrying) {
+      return;
+    }
+
+    setRetrying(true);
+    setMessage(null);
+
+    try {
+      const nextTask = await retryTask(task.id);
+      setTask(nextTask);
+      setSource("api");
+      setMessage("Task queued for another run.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to retry task.");
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -122,9 +143,13 @@ export default function TaskPage({ params }: TaskPageProps) {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <StatusBadge status={task.status} />
-            <Button variant="outline" size="sm" className="gap-2" onClick={() => void loadTask(true)} disabled={refreshing}>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => void loadTask(true)} disabled={refreshing || retrying}>
               <RotateCcw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
               {refreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => void handleRetry()} disabled={retrying}>
+              <RotateCcw className={`h-4 w-4 ${retrying ? "animate-spin" : ""}`} />
+              {retrying ? "Retrying…" : "Retry Run"}
             </Button>
           </div>
         </div>

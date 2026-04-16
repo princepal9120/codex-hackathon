@@ -357,3 +357,11 @@ export async function createTask(input: CreateTaskInput): Promise<TaskRecord> {
 
   return normalizeTask(getTaskPayload(payload));
 }
+
+export async function retryTask(taskId: string): Promise<TaskRecord> {
+  const payload = await fetchJson(`/api/tasks/${taskId}`, {
+    method: "POST",
+  });
+
+  return normalizeTask(getTaskPayload(payload));
+}

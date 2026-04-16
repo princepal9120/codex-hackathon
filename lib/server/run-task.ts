@@ -1,9 +1,10 @@
-import path from "node:path";
 import { spawn } from "node:child_process";
 
 import { loadCodexFlowConfig, resolveTaskCommands, resolveTaskRepoPath } from "@/lib/config";
 import { getTaskById, updateTask } from "@/lib/server/task-store";
 import type { RunTaskResult } from "@/lib/task-types";
+
+const inFlightTasks = new Set<string>();
 
 interface WorkerPayload {
   task: {
@@ -18,10 +19,8 @@ interface WorkerPayload {
 }
 
 function runWorker(payload: WorkerPayload) {
-  const scriptPath = path.join(process.cwd(), "engine", "run_task.py");
-
   return new Promise<RunTaskResult>((resolve, reject) => {
-    const child = spawn("python3", [scriptPath], {
+    const child = spawn("python3", ["-m", "engine.run_task"], {
       cwd: process.cwd(),
       env: {
         ...process.env,
@@ -116,4 +115,20 @@ export async function executeTask(taskId: string) {
       runFinishedAt: new Date().toISOString(),
     });
   }
+}
+
+export function queueTaskExecution(taskId: string) {
+  if (inFlightTasks.has(taskId)) {
+    return false;
+  }
+
+  inFlightTasks.add(taskId);
+
+  queueMicrotask(() => {
+    void executeTask(taskId).finally(() => {
+      inFlightTasks.delete(taskId);
+    });
+  });
+
+  return true;
 }

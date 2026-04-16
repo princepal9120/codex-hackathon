@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { queueTaskExecution } from "@/lib/server/run-task";
 import { createTask, listTasks } from "@/lib/server/task-store";
 import type { CreateTaskInput } from "@/lib/task-types";
 
@@ -32,5 +33,6 @@ export async function POST(request: Request) {
   }
 
   const task = createTask(input);
+  queueTaskExecution(task.id);
   return NextResponse.json({ task }, { status: 201 });
 }
