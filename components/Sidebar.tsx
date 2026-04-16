@@ -4,7 +4,6 @@ import { type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Bot,
   ChevronDown,
   Command,
   FolderKanban,
@@ -13,7 +12,6 @@ import {
   Search,
   Settings,
   Sparkles,
-  Users,
   Workflow,
 } from "lucide-react";
 

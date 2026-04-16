@@ -88,7 +88,7 @@ export default function CreateTaskModal({
   };
 
   const reset = () => {
-    setForm((current) => ({ ...initialForm, projectId: projects[0]?.id || '' }));
+    setForm((_prev) => ({ ...initialForm, projectId: projects[0]?.id || '' }));
     setError(null);
     setIsSubmitting(false);
   };
