@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
 
-let database: DatabaseSync | null = null;
+let database: Database.Database | null = null;
 const TASK_COLUMN_DEFINITIONS: Record<string, string> = {
   project_id: "TEXT",
   task_kind: "TEXT NOT NULL DEFAULT 'issue'",
@@ -68,7 +68,7 @@ function getDatabasePath() {
   return path.join(dataDir, "codexflow.sqlite");
 }
 
-function initialize(db: DatabaseSync) {
+function initialize(db: Database.Database) {
   db.exec(`
     PRAGMA journal_mode = WAL;
 
@@ -197,7 +197,7 @@ function initialize(db: DatabaseSync) {
 
 export function getDb() {
   if (!database) {
-    database = new DatabaseSync(getDatabasePath());
+    database = new Database(getDatabasePath());
     initialize(database);
   }
 
