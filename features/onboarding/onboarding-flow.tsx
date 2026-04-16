@@ -11,6 +11,7 @@ import {
   Copy,
   FileSearch,
   FolderGit2,
+  Loader2,
   ShieldCheck,
   Sparkles,
   Terminal,
@@ -62,6 +63,7 @@ const optionalCliOverrides = [
   'export MULTICA_CODEX_PATH="$(which codex)"',
   'export MULTICA_CODEX_MODEL="gpt-5.4"',
 ] as const;
+const launchCheckpointCommands = [...installCommands.slice(0, 1), ...runtimeCommands.slice(0, 3)] as const;
 
 const starterTemplates = [
   {
@@ -112,7 +114,7 @@ const safeDefaults = {
   testCommand: "python3 -m unittest discover -s tests",
 } satisfies Required<Pick<CreateTaskInput, "repoPath" | "lintCommand" | "testCommand">>;
 
-export default function OnboardingFlow() {
+export default function OnboardingFlow(): JSX.Element {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [projectName, setProjectName] = useState("CodexFlow onboarding");
@@ -124,19 +126,27 @@ export default function OnboardingFlow() {
   const [createdProject, setCreatedProject] = useState<ProjectRecord | null>(null);
   const [createdTask, setCreatedTask] = useState<TaskRecord | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isHandingOff, setIsHandingOff] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const selectedTemplate = useMemo(
     () => starterTemplates.find((template) => template.id === selectedTemplateId) ?? starterTemplates[0],
     [selectedTemplateId]
   );
-
-  const canAdvanceProject = projectName.trim().length > 0 && repoPath.trim().length > 0 && reviewOwner.trim().length > 0;
-  const canAdvanceTask = taskTitle.trim().length > 0 && taskPrompt.trim().length > 0;
+  const selectedTaskKindLabel = getTaskKindLabel(selectedTemplate.taskKind);
+  const selectedTaskKindLabelLowerCase = selectedTaskKindLabel.toLowerCase();
+  const trimmedRepoPath = repoPath.trim();
+  const trimmedProjectName = projectName.trim();
+  const trimmedReviewOwner = reviewOwner.trim();
+  const trimmedTaskTitle = taskTitle.trim();
+  const trimmedTaskPrompt = taskPrompt.trim();
+  const canAdvanceProject = trimmedProjectName.length > 0 && trimmedRepoPath.length > 0 && trimmedReviewOwner.length > 0;
+  const canAdvanceTask = trimmedTaskTitle.length > 0 && trimmedTaskPrompt.length > 0;
 
   const resetLaunchResult = () => {
     setCreatedProject(null);
     setCreatedTask(null);
+    setIsHandingOff(false);
     setSubmitError(null);
   };
 
@@ -200,7 +210,10 @@ export default function OnboardingFlow() {
 
       setCreatedProject(project);
       setCreatedTask(task);
+      setIsHandingOff(true);
+      router.push(`/board?from=onboarding&createdTaskId=${encodeURIComponent(task.id)}`);
     } catch (error) {
+      setIsHandingOff(false);
       setSubmitError(error instanceof Error ? error.message : "Failed to create the starter task.");
     } finally {
       setIsSubmitting(false);
@@ -239,19 +252,20 @@ export default function OnboardingFlow() {
               {steps.map((item, index) => {
                 const isActive = index === step;
                 const isComplete = index < step || (index === step && createdTask && index === steps.length - 1);
+                let stepStatusClassName =
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors border-[#ddd4c8] bg-[#faf6f0] text-[#8c8377]";
+
+                if (isComplete) {
+                  stepStatusClassName =
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors border-[#1f7a68] bg-[#e7f6f0] text-[#14594c]";
+                } else if (isActive) {
+                  stepStatusClassName =
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors border-[#1f1c17] bg-[#1f1c17] text-white";
+                }
 
                 return (
                   <div key={item.label} className="flex items-start gap-3">
-                    <div
-                      className={cn(
-                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors",
-                        isComplete
-                          ? "border-[#1f7a68] bg-[#e7f6f0] text-[#14594c]"
-                          : isActive
-                            ? "border-[#1f1c17] bg-[#1f1c17] text-white"
-                            : "border-[#ddd4c8] bg-[#faf6f0] text-[#8c8377]"
-                      )}
-                    >
+                    <div className={stepStatusClassName}>
                       {isComplete ? <Check className="h-4 w-4" /> : index + 1}
                     </div>
                     <div className="pt-0.5">
@@ -364,7 +378,7 @@ export default function OnboardingFlow() {
                   <ReadonlyStat
                     icon={<FolderGit2 className="h-4 w-4" />}
                     label="Repo target"
-                    value={repoPath.trim() || "."}
+                    value={trimmedRepoPath || "."}
                     helper="Stored on the task and validated against the configured root."
                   />
                   <ReadonlyStat
@@ -462,28 +476,33 @@ export default function OnboardingFlow() {
                 <div className="grid gap-4 lg:grid-cols-3">
                   {starterTemplates.map((template) => {
                     const isSelected = template.id === selectedTemplateId;
+                    let templateCardClassName = "rounded-[1.5rem] border p-5 text-left transition-all border-[#e6ded3] bg-white text-[#1f1c17] hover:border-[#cfc5b8] hover:bg-[#fcfaf6]";
+                    let templateKindClassName = "mt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8b8378]";
+                    let templateDescriptionClassName = "mt-2 text-sm leading-6 text-[#6f675d]";
+                    let templateOutcomeClassName = "mt-4 text-xs leading-5 text-[#8b8378]";
+
+                    if (isSelected) {
+                      templateCardClassName =
+                        "rounded-[1.5rem] border p-5 text-left transition-all border-[#1f1c17] bg-[#1f1c17] text-white shadow-[0_18px_40px_rgba(31,24,18,0.18)]";
+                      templateKindClassName = "mt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65";
+                      templateDescriptionClassName = "mt-2 text-sm leading-6 text-white/82";
+                      templateOutcomeClassName = "mt-4 text-xs leading-5 text-white/65";
+                    }
 
                     return (
                       <button
                         key={template.id}
                         type="button"
                         onClick={() => handleTemplateSelect(template.id)}
-                        className={cn(
-                          "rounded-[1.5rem] border p-5 text-left transition-all",
-                          isSelected
-                            ? "border-[#1f1c17] bg-[#1f1c17] text-white shadow-[0_18px_40px_rgba(31,24,18,0.18)]"
-                            : "border-[#e6ded3] bg-white text-[#1f1c17] hover:border-[#cfc5b8] hover:bg-[#fcfaf6]"
-                        )}
+                        className={templateCardClassName}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-semibold">{template.name}</p>
                           {isSelected ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4 text-[#8b8378]" />}
                         </div>
-                        <p className={cn("mt-3 text-[10px] font-semibold uppercase tracking-[0.18em]", isSelected ? "text-white/65" : "text-[#8b8378]")}>
-                          {getTaskKindLabel(template.taskKind)}
-                        </p>
-                        <p className={cn("mt-2 text-sm leading-6", isSelected ? "text-white/82" : "text-[#6f675d]")}>{template.description}</p>
-                        <p className={cn("mt-4 text-xs leading-5", isSelected ? "text-white/65" : "text-[#8b8378]")}>{template.outcome}</p>
+                        <p className={templateKindClassName}>{getTaskKindLabel(template.taskKind)}</p>
+                        <p className={templateDescriptionClassName}>{template.description}</p>
+                        <p className={templateOutcomeClassName}>{template.outcome}</p>
                       </button>
                     );
                   })}
@@ -491,7 +510,7 @@ export default function OnboardingFlow() {
 
                 <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
                   <div className="space-y-5">
-                    <Field label={`${getTaskKindLabel(selectedTemplate.taskKind)} title`} helper="Short board-facing summary for the first run.">
+                    <Field label={`${selectedTaskKindLabel} title`} helper="Short board-facing summary for the first run.">
                       <Input
                         value={taskTitle}
                         onChange={(event) => {
@@ -501,7 +520,7 @@ export default function OnboardingFlow() {
                         placeholder="Improve the failed-state review path"
                       />
                     </Field>
-                    <Field label={`${getTaskKindLabel(selectedTemplate.taskKind)} prompt`} helper="Describe the behavior, constraints, and what good verification should prove.">
+                    <Field label={`${selectedTaskKindLabel} prompt`} helper="Describe the behavior, constraints, and what good verification should prove.">
                       <Textarea
                         value={taskPrompt}
                         onChange={(event) => {
@@ -518,7 +537,7 @@ export default function OnboardingFlow() {
                     body={selectedTemplate.outcome}
                     items={[
                       `Project: ${projectName}`,
-                      `Item type: ${getTaskKindLabel(selectedTemplate.taskKind)}`,
+                      `Item type: ${selectedTaskKindLabel}`,
                       `Review owner: ${reviewOwner}`,
                       `Repo target: ${repoPath || "."}`,
                     ]}
@@ -545,8 +564,8 @@ export default function OnboardingFlow() {
               title={createdTask ? "Starter run created" : "Launch the first repo-aware run"}
               description={
                 createdTask
-                  ? "The onboarding flow now hands off into the exact board and task-detail surfaces that make CodexFlow useful."
-                  : "Review the exact project-backed payload that will be sent to the API, then create the starter run explicitly."
+                  ? "CodexFlow is handing you straight into the kanban board so the created work item is visible immediately."
+                  : "Review the exact project-backed payload that will be sent to the API, then create the starter run and open the kanban board in one shot."
               }
             >
               <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -554,24 +573,24 @@ export default function OnboardingFlow() {
                   <ReadonlyStat
                     icon={<Workflow className="h-4 w-4" />}
                     label="Project"
-                    value={projectName.trim()}
-                    helper={`Reviewed by ${reviewOwner.trim()}`}
+                    value={trimmedProjectName}
+                    helper={`Reviewed by ${trimmedReviewOwner}`}
                   />
                   <ReadonlyStat
                     icon={<Sparkles className="h-4 w-4" />}
                     label="Item type"
-                    value={getTaskKindLabel(selectedTemplate.taskKind)}
+                    value={selectedTaskKindLabel}
                     helper="Starter template controls whether the first run lands as an issue, task, or report."
                   />
                   <ReadonlyStat
                     icon={<FileSearch className="h-4 w-4" />}
-                    label={`${getTaskKindLabel(selectedTemplate.taskKind)} title`}
-                    value={taskTitle.trim()}
+                    label={`${selectedTaskKindLabel} title`}
+                    value={trimmedTaskTitle}
                     helper="This is the board-facing summary for the starter run."
                   />
                   <div className="rounded-[1.5rem] border border-[#e6ded3] bg-white p-5 shadow-sm">
                     <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[#8b8378]">Prompt preview</p>
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[#40392f]">{taskPrompt.trim()}</p>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[#40392f]">{trimmedTaskPrompt}</p>
                   </div>
                 </div>
 
@@ -580,13 +599,13 @@ export default function OnboardingFlow() {
                   <div className="mt-5 space-y-3">
                     <ChecklistRow>The onboarding flow creates or reuses a real project through `/api/projects` before launching the first work item.</ChecklistRow>
                     <ChecklistRow>CodexFlow selects relevant files, builds a prompt preview, and records the exact work item type.</ChecklistRow>
-                    <ChecklistRow>Patch preview, verification evidence, and score show up in the board/detail flow.</ChecklistRow>
+                    <ChecklistRow>The created item appears in the shared kanban board immediately after setup completes.</ChecklistRow>
                   </div>
 
                   <div className="mt-6 rounded-[1.25rem] border border-[#e3ddd2] bg-white px-4 py-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-[#8b8378]">Verification defaults</p>
                     <div className="mt-3 space-y-2 text-sm text-[#4f473d]">
-                      <p>Repo: {repoPath.trim() || "."}</p>
+                      <p>Repo: {trimmedRepoPath || "."}</p>
                       <p>Lint: {safeDefaults.lintCommand}</p>
                       <p>Tests: {safeDefaults.testCommand}</p>
                     </div>
@@ -595,7 +614,7 @@ export default function OnboardingFlow() {
                   <div className="mt-4 rounded-[1.25rem] border border-[#e3ddd2] bg-white px-4 py-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-[#8b8378]">CLI checkpoints</p>
                     <div className="mt-3 space-y-2">
-                      {[...installCommands.slice(0, 1), ...runtimeCommands.slice(0, 3)].map((item) => (
+                      {launchCheckpointCommands.map((item) => (
                         <CommandBlock key={item.command} label={item.label} command={item.command} compact />
                       ))}
                     </div>
@@ -613,33 +632,24 @@ export default function OnboardingFlow() {
                 <div className="mt-6 rounded-[1.6rem] border border-[#d9eee8] bg-[#f2fbf7] p-6">
                   <div className="flex items-start gap-4">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#dff5ed] text-[#176757]">
-                      <Check className="h-6 w-6" />
+                      {isHandingOff ? <Loader2 className="h-6 w-6 animate-spin" /> : <Check className="h-6 w-6" />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[#4b8a78]">Task created</p>
+                      <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[#4b8a78]">
+                        {isHandingOff ? "Opening board" : "Task created"}
+                      </p>
                       <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[#184b40]">{getTaskIdentifier(createdTask.id)}</h3>
                       <p className="mt-3 text-sm leading-7 text-[#326457]">
                         {createdTask.title} is now queued in the live pipeline as a {getTaskKindLabel(createdTask.taskKind).toLowerCase()} in{" "}
-                        {createdProject?.name ?? "the selected project"}. Open the board for the system view or jump directly into task detail to inspect prompt preview, diff, and verification evidence.
+                        {createdProject?.name ?? "the selected project"}. CodexFlow is sending you directly to the kanban board so you can see the item in the shared flow immediately.
                       </p>
-                      <div className="mt-5 flex flex-wrap gap-3">
-                        <Button className="gap-2" onClick={() => router.push(`/tasks/${createdTask.id}`)}>
-                          Open task detail
-                          <ArrowRight className="h-4 w-4" />
-                        </Button>
-                        <Link href="/board">
-                          <Button variant="outline">Open board</Button>
-                        </Link>
-                        <Link href="/projects">
-                          <Button variant="outline">Open projects</Button>
-                        </Link>
-                      </div>
                       <div className="mt-5 rounded-[1.2rem] border border-[#d4ebe3] bg-white px-4 py-4 text-sm text-[#3f5f56]">
                         <div className="flex items-center gap-2">
                           <Bot className="h-4 w-4" />
                           <span>Status: {createdTask.status.replace("_", " ")}</span>
                         </div>
                         {createdProject ? <p className="mt-2">Project: {createdProject.name}</p> : null}
+                        {isHandingOff ? <p className="mt-2">Redirecting to `/board`…</p> : null}
                       </div>
                     </div>
                   </div>
@@ -652,8 +662,10 @@ export default function OnboardingFlow() {
                   Back
                 </Button>
                 {createdTask ? null : (
-                  <Button onClick={handleCreateStarterTask} disabled={!canAdvanceTask || isSubmitting} className="gap-2">
-                    {isSubmitting ? `Creating starter ${getTaskKindLabel(selectedTemplate.taskKind).toLowerCase()}…` : `Create starter ${getTaskKindLabel(selectedTemplate.taskKind).toLowerCase()}`}
+                  <Button onClick={handleCreateStarterTask} disabled={!canAdvanceTask || isSubmitting || isHandingOff} className="gap-2">
+                    {isSubmitting
+                      ? `Creating starter ${selectedTaskKindLabelLowerCase}…`
+                      : `Create starter ${selectedTaskKindLabelLowerCase} and open board`}
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 )}
@@ -666,29 +678,39 @@ export default function OnboardingFlow() {
   );
 }
 
-function ProgressStepper({ activeStep, hasCompletion }: { activeStep: number; hasCompletion: boolean }) {
+function ProgressStepper({
+  activeStep,
+  hasCompletion,
+}: {
+  activeStep: number;
+  hasCompletion: boolean;
+}): JSX.Element {
   return (
     <div className="mb-8 flex flex-wrap items-center gap-2 border-b border-[#ece4d8] pb-6">
       {steps.map((item, index) => {
         const isComplete = index < activeStep || (index === steps.length - 1 && hasCompletion);
         const isActive = index === activeStep;
+        let stepIndicatorClassName =
+          "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors bg-[#f2ece4] text-[#8b8378]";
+        let stepLabelClassName = "text-sm text-[#8b8378]";
+
+        if (isComplete) {
+          stepIndicatorClassName =
+            "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors bg-[#1f1c17] text-white";
+          stepLabelClassName = "text-sm text-[#1f1c17]";
+        } else if (isActive) {
+          stepIndicatorClassName =
+            "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors border border-[#1f1c17] bg-white text-[#1f1c17]";
+          stepLabelClassName = "text-sm text-[#1f1c17]";
+        }
 
         return (
           <div key={item.label} className="flex items-center gap-2">
             <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors",
-                  isComplete
-                    ? "bg-[#1f1c17] text-white"
-                    : isActive
-                      ? "border border-[#1f1c17] bg-white text-[#1f1c17]"
-                      : "bg-[#f2ece4] text-[#8b8378]"
-                )}
-              >
+              <div className={stepIndicatorClassName}>
                 {isComplete ? <Check className="h-3.5 w-3.5" /> : index + 1}
               </div>
-              <span className={cn("text-sm", isActive || isComplete ? "text-[#1f1c17]" : "text-[#8b8378]")}>{item.label}</span>
+              <span className={stepLabelClassName}>{item.label}</span>
             </div>
             {index < steps.length - 1 ? <div className="h-px w-8 bg-[#e4dbcf]" /> : null}
           </div>
@@ -698,7 +720,17 @@ function ProgressStepper({ activeStep, hasCompletion }: { activeStep: number; ha
   );
 }
 
-function StepShell({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: ReactNode }) {
+function StepShell({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+}): JSX.Element {
   return (
     <section>
       <p className="font-mono-ui text-[0.68rem] uppercase tracking-[0.24em] text-[#8b8378]">{eyebrow}</p>
@@ -709,7 +741,7 @@ function StepShell({ eyebrow, title, description, children }: { eyebrow: string;
   );
 }
 
-function Field({ label, helper, children }: { label: string; helper: string; children: ReactNode }) {
+function Field({ label, helper, children }: { label: string; helper: string; children: ReactNode }): JSX.Element {
   return (
     <label className="grid gap-2">
       <div>
@@ -721,7 +753,7 @@ function Field({ label, helper, children }: { label: string; helper: string; chi
   );
 }
 
-function InfoPanel({ title, body, items }: { title: string; body: string; items: string[] }) {
+function InfoPanel({ title, body, items }: { title: string; body: string; items: string[] }): JSX.Element {
   return (
     <div className="rounded-[1.5rem] border border-[#e6ded3] bg-[#faf6f0] p-5">
       <p className="text-lg font-semibold text-[#1f1c17]">{title}</p>
@@ -735,7 +767,7 @@ function InfoPanel({ title, body, items }: { title: string; body: string; items:
   );
 }
 
-function ChecklistRow({ children }: { children: ReactNode }) {
+function ChecklistRow({ children }: { children: ReactNode }): JSX.Element {
   return (
     <div className="flex items-start gap-3 rounded-[1rem] border border-[#e6ded3] bg-white px-4 py-3 text-sm text-[#4d463d]">
       <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#eff7f4] text-[#176757]">
@@ -746,7 +778,17 @@ function ChecklistRow({ children }: { children: ReactNode }) {
   );
 }
 
-function ReadonlyStat({ icon, label, value, helper }: { icon: ReactNode; label: string; value: string; helper: string }) {
+function ReadonlyStat({
+  icon,
+  label,
+  value,
+  helper,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  helper: string;
+}): JSX.Element {
   return (
     <div className="rounded-[1.5rem] border border-[#e6ded3] bg-white p-5 shadow-sm">
       <div className="flex items-center gap-2 text-[#746b60]">
@@ -759,7 +801,7 @@ function ReadonlyStat({ icon, label, value, helper }: { icon: ReactNode; label: 
   );
 }
 
-function StepActions({ children }: { children: ReactNode }) {
+function StepActions({ children }: { children: ReactNode }): JSX.Element {
   return <div className="mt-8 flex flex-wrap items-center justify-between gap-3">{children}</div>;
 }
 
@@ -773,7 +815,7 @@ function CommandBlock({
   command: string;
   compact?: boolean;
   subtle?: boolean;
-}) {
+}): JSX.Element {
   const [copied, setCopied] = useState(false);
 
   return (

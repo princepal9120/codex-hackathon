@@ -76,6 +76,7 @@ export interface TaskRecord {
   testCommand?: string | null;
   timeline: TaskTimelineEvent[];
   failureSignal: TaskFailureSignal | null;
+  boardPosition: number;
 }
 
 export interface TaskCollectionResult {
@@ -331,27 +332,27 @@ function toTimelineEvents(value: unknown): TaskTimelineEvent[] {
     const record = entry as Record<string, unknown>;
     const phase: TaskTimelineEventPhase =
       record.phase === "task" ||
-      record.phase === "context" ||
-      record.phase === "execution" ||
-      record.phase === "verification"
+        record.phase === "context" ||
+        record.phase === "execution" ||
+        record.phase === "verification"
         ? record.phase
         : "execution";
     const kind: TaskTimelineEventKind =
       record.kind === "task_created" ||
-      record.kind === "task_requeued" ||
-      record.kind === "run_started" ||
-      record.kind === "context_selected" ||
-      record.kind === "patch_generated" ||
-      record.kind === "verification_completed" ||
-      record.kind === "run_completed" ||
-      record.kind === "run_failed"
+        record.kind === "task_requeued" ||
+        record.kind === "run_started" ||
+        record.kind === "context_selected" ||
+        record.kind === "patch_generated" ||
+        record.kind === "verification_completed" ||
+        record.kind === "run_completed" ||
+        record.kind === "run_failed"
         ? record.kind
         : "run_completed";
     const level: TaskTimelineEventLevel =
       record.level === "info" ||
-      record.level === "success" ||
-      record.level === "warning" ||
-      record.level === "error"
+        record.level === "success" ||
+        record.level === "warning" ||
+        record.level === "error"
         ? record.level
         : "info";
 
@@ -387,9 +388,9 @@ function toFailureSignal(value: unknown): TaskFailureSignal | null {
   const record = value as Record<string, unknown>;
   const category: FailureClassification | null =
     record.category === "verification" ||
-    record.category === "execution" ||
-    record.category === "empty_patch" ||
-    record.category === "unknown"
+      record.category === "execution" ||
+      record.category === "empty_patch" ||
+      record.category === "unknown"
       ? record.category
       : null;
 
@@ -566,6 +567,7 @@ function normalizeTask(raw: unknown): TaskRecord {
       null,
     timeline,
     failureSignal,
+    boardPosition: typeof record.boardPosition === "number" ? record.boardPosition : typeof record.board_position === "number" ? record.board_position : 0,
   };
 }
 
@@ -658,6 +660,15 @@ export async function retryTask(taskId: string): Promise<TaskRecord> {
 export async function runTask(taskId: string): Promise<TaskRecord> {
   const payload = await fetchJson(`/api/tasks/${taskId}/run`, {
     method: "POST",
+  });
+
+  return normalizeTask(getTaskPayload(payload));
+}
+
+export async function moveTask(taskId: string, status: TaskStatus, position: number): Promise<TaskRecord> {
+  const payload = await fetchJson(`/api/tasks/${taskId}/move`, {
+    method: "POST",
+    body: JSON.stringify({ status, position }),
   });
 
   return normalizeTask(getTaskPayload(payload));

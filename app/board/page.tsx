@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Filter, Loader2, Plus, Sparkles } from 'lucide-react';
 
@@ -8,6 +9,7 @@ import CreateTaskModal from '@/components/CreateTaskModal';
 import TaskColumn from '@/components/TaskColumn';
 import {
   fetchTasks,
+  getTaskIdentifier,
   getTaskKindLabel,
   type TaskKind,
   type TaskRecord,
@@ -19,8 +21,9 @@ import { Select } from '@/components/ui/Select';
 import Shell from '@/components/Shell';
 
 const columnOrder: TaskStatus[] = ['queued', 'running', 'passed', 'failed', 'needs_review'];
+const taskKindOptions: TaskKind[] = ['issue', 'task', 'report'];
 
-export default function BoardPage() {
+export default function BoardPage(): JSX.Element {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +32,8 @@ export default function BoardPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [projectFilter, setProjectFilter] = useState('all');
   const [kindFilter, setKindFilter] = useState<'all' | TaskKind>('all');
+  const [createdTaskId, setCreatedTaskId] = useState<string | null>(null);
+  const [fromOnboarding, setFromOnboarding] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -50,6 +55,16 @@ export default function BoardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    setCreatedTaskId(params.get('createdTaskId'));
+    setFromOnboarding(params.get('from') === 'onboarding');
+  }, []);
+
   const sortedTasks = useMemo(
     () =>
       [...tasks].sort((a, b) => {
@@ -69,6 +84,19 @@ export default function BoardPage() {
       return matchesProject && matchesKind;
     });
   }, [kindFilter, projectFilter, sortedTasks]);
+
+  const createdTask = useMemo(
+    () => (createdTaskId ? tasks.find((task) => task.id === createdTaskId) ?? null : null),
+    [createdTaskId, tasks]
+  );
+  let createdTaskMessage: string | null = null;
+  if (createdTask) {
+    createdTaskMessage = `${createdTask.title} (${getTaskIdentifier(createdTask.id)}) is now on the kanban board.`;
+  } else if (createdTaskId) {
+    createdTaskMessage = `Your starter work item (${getTaskIdentifier(createdTaskId)}) was created and added to the board.`;
+  }
+  const createdTaskHref = createdTaskId ? `/tasks/${createdTaskId}` : '/board';
+  const isEmptyState = filteredTasks.length === 0 && !message;
 
   return (
     <Shell>
@@ -92,6 +120,22 @@ export default function BoardPage() {
         <div className="border-b border-border bg-muted/50 px-6 py-2.5 text-sm text-muted-foreground">{message}</div>
       )}
 
+      {fromOnboarding && createdTaskId ? (
+        <div className="border-b border-emerald-200 bg-emerald-50 px-6 py-3 text-sm text-emerald-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Guided setup complete</p>
+              <p className="mt-1">{createdTaskMessage}</p>
+            </div>
+            <Link href={createdTaskHref}>
+              <Button variant="outline" size="sm">
+                Open task detail
+              </Button>
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       <div className="border-b border-border bg-card px-6 py-4">
         <div className="flex flex-wrap items-end gap-4">
           <div className="rounded-[var(--radius)] border border-border bg-muted px-3 py-2 text-muted-foreground">
@@ -112,7 +156,7 @@ export default function BoardPage() {
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Item type</span>
             <Select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as 'all' | TaskKind)} className="min-w-[180px]">
               <option value="all">All item types</option>
-              {(['issue', 'task', 'report'] as TaskKind[]).map((taskKind) => (
+              {taskKindOptions.map((taskKind) => (
                 <option key={taskKind} value={taskKind}>
                   {getTaskKindLabel(taskKind)}
                 </option>
@@ -131,7 +175,7 @@ export default function BoardPage() {
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading work items…
           </div>
-        ) : filteredTasks.length === 0 && !message ? (
+        ) : isEmptyState ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <div className="rounded-lg border border-dashed border-border bg-card p-10">
               <Sparkles className="mx-auto h-10 w-10 text-muted-foreground/30" />

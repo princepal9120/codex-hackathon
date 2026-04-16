@@ -15,6 +15,7 @@ const TASK_COLUMN_DEFINITIONS: Record<string, string> = {
   verification_notes: "TEXT NOT NULL DEFAULT ''",
   timeline_json: "TEXT NOT NULL DEFAULT '[]'",
   failure_signal_json: "TEXT",
+  board_position: "REAL NOT NULL DEFAULT 0",
 };
 
 function getDatabasePath() {
@@ -68,6 +69,7 @@ function initialize(db: DatabaseSync) {
       test_command TEXT,
       timeline_json TEXT NOT NULL DEFAULT '[]',
       failure_signal_json TEXT,
+      board_position REAL NOT NULL DEFAULT 0,
       FOREIGN KEY (project_id) REFERENCES projects(id)
     );
   `);

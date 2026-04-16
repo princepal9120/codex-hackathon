@@ -85,6 +85,7 @@ export interface TaskRecord {
   testCommand: string | null;
   timeline: TaskEvent[];
   failureSignal: TaskFailureSignal | null;
+  boardPosition: number;
 }
 
 export interface CreateTaskInput {

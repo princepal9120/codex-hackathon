@@ -44,6 +44,7 @@ interface TaskRow {
   test_command: string | null;
   timeline_json: string;
   failure_signal_json: string | null;
+  board_position: number;
 }
 
 function createTimelineEvent(
@@ -99,27 +100,27 @@ function normalizeTimeline(value: unknown): TaskEvent[] {
         id: typeof record.id === "string" ? record.id : undefined,
         phase:
           record.phase === "task" ||
-          record.phase === "context" ||
-          record.phase === "execution" ||
-          record.phase === "verification"
+            record.phase === "context" ||
+            record.phase === "execution" ||
+            record.phase === "verification"
             ? record.phase
             : "execution",
         kind:
           record.kind === "task_created" ||
-          record.kind === "task_requeued" ||
-          record.kind === "run_started" ||
-          record.kind === "context_selected" ||
-          record.kind === "patch_generated" ||
-          record.kind === "verification_completed" ||
-          record.kind === "run_completed" ||
-          record.kind === "run_failed"
+            record.kind === "task_requeued" ||
+            record.kind === "run_started" ||
+            record.kind === "context_selected" ||
+            record.kind === "patch_generated" ||
+            record.kind === "verification_completed" ||
+            record.kind === "run_completed" ||
+            record.kind === "run_failed"
             ? record.kind
             : "run_completed",
         level:
           record.level === "info" ||
-          record.level === "success" ||
-          record.level === "warning" ||
-          record.level === "error"
+            record.level === "success" ||
+            record.level === "warning" ||
+            record.level === "error"
             ? record.level
             : "info",
         title,
@@ -142,9 +143,9 @@ function normalizeFailureSignal(value: unknown): TaskFailureSignal | null {
   const record = value as Record<string, unknown>;
   const category =
     record.category === "verification" ||
-    record.category === "execution" ||
-    record.category === "empty_patch" ||
-    record.category === "unknown"
+      record.category === "execution" ||
+      record.category === "empty_patch" ||
+      record.category === "unknown"
       ? record.category
       : null;
 
@@ -256,6 +257,7 @@ const baseSeedTasks: Array<Omit<TaskRecord, "id" | "projectId" | "projectName">>
       }),
     ],
     failureSignal: null,
+    boardPosition: 0,
   },
   {
     title: "Ship onboarding report for repo operators",
@@ -349,6 +351,7 @@ const baseSeedTasks: Array<Omit<TaskRecord, "id" | "projectId" | "projectName">>
       }),
     ],
     failureSignal: null,
+    boardPosition: 1000,
   },
   {
     title: "Implement project creation flow",
@@ -447,6 +450,7 @@ const baseSeedTasks: Array<Omit<TaskRecord, "id" | "projectId" | "projectName">>
       detail: "The generated preview existed, but lint and test checks both failed for the project flow update.",
       detectedAt: new Date("2026-04-13T08:36:00.000Z").toISOString(),
     },
+    boardPosition: 2000,
   },
 ];
 
@@ -483,6 +487,7 @@ function rowToTask(row: TaskRow): TaskRecord {
     testCommand: row.test_command,
     timeline: normalizeTimeline(parseJson(row.timeline_json, [])),
     failureSignal: normalizeFailureSignal(parseJson(row.failure_signal_json, null)),
+    boardPosition: Number(row.board_position) || 0,
   };
 }
 
@@ -518,6 +523,7 @@ function taskToParams(task: TaskRecord) {
     test_command: task.testCommand,
     timeline_json: JSON.stringify(task.timeline),
     failure_signal_json: task.failureSignal ? JSON.stringify(task.failureSignal) : null,
+    board_position: task.boardPosition,
   };
 }
 
@@ -537,22 +543,26 @@ export function ensureSeedTasks() {
       id, title, prompt, status, project_id, task_kind, repo_path, created_at, updated_at, run_started_at, run_finished_at,
       score, selected_files_json, prompt_preview, context_summary, execution_mode, codex_output, diff_output, patch_summary,
       lint_status, test_status, lint_output, test_output, verification_notes, logs,
-      error_message, lint_command, test_command, timeline_json, failure_signal_json
+      error_message, lint_command, test_command, timeline_json, failure_signal_json, board_position
     ) VALUES (
       :id, :title, :prompt, :status, :project_id, :task_kind, :repo_path, :created_at, :updated_at, :run_started_at, :run_finished_at,
       :score, :selected_files_json, :prompt_preview, :context_summary, :execution_mode, :codex_output, :diff_output, :patch_summary,
       :lint_status, :test_status, :lint_output, :test_output, :verification_notes, :logs,
-      :error_message, :lint_command, :test_command, :timeline_json, :failure_signal_json
+      :error_message, :lint_command, :test_command, :timeline_json, :failure_signal_json, :board_position
     )
   `);
 
-  for (const task of baseSeedTasks) {
-    insert.run(taskToParams({
-      ...task,
-      id: randomUUID(),
-      projectId: defaultProject?.id ?? null,
-      projectName: defaultProject?.name ?? null,
-    }));
+  for (let i = 0; i < baseSeedTasks.length; i++) {
+    const task = baseSeedTasks[i];
+    if (task) {
+      insert.run(taskToParams({
+        ...task,
+        id: randomUUID(),
+        projectId: defaultProject?.id ?? null,
+        projectName: defaultProject?.name ?? null,
+        boardPosition: i * 1000,
+      }));
+    }
   }
 }
 
@@ -634,19 +644,19 @@ export function createTask(input: CreateTaskInput) {
       }),
     ],
     failureSignal: null,
+    boardPosition: 0,
   };
-
   db.prepare(`
     INSERT INTO tasks (
       id, title, prompt, status, project_id, task_kind, repo_path, created_at, updated_at, run_started_at, run_finished_at,
       score, selected_files_json, prompt_preview, context_summary, execution_mode, codex_output, diff_output, patch_summary,
       lint_status, test_status, lint_output, test_output, verification_notes, logs,
-      error_message, lint_command, test_command, timeline_json, failure_signal_json
+      error_message, lint_command, test_command, timeline_json, failure_signal_json, board_position
     ) VALUES (
       :id, :title, :prompt, :status, :project_id, :task_kind, :repo_path, :created_at, :updated_at, :run_started_at, :run_finished_at,
       :score, :selected_files_json, :prompt_preview, :context_summary, :execution_mode, :codex_output, :diff_output, :patch_summary,
       :lint_status, :test_status, :lint_output, :test_output, :verification_notes, :logs,
-      :error_message, :lint_command, :test_command, :timeline_json, :failure_signal_json
+      :error_message, :lint_command, :test_command, :timeline_json, :failure_signal_json, :board_position
     )
   `).run(taskToParams(task));
 
@@ -669,36 +679,37 @@ export function updateTask(id: string, updates: Partial<TaskRecord>) {
 
   getDb().prepare(`
     UPDATE tasks SET
-      title = :title,
-      prompt = :prompt,
-      status = :status,
-      project_id = :project_id,
-      task_kind = :task_kind,
-      repo_path = :repo_path,
-      created_at = :created_at,
-      updated_at = :updated_at,
-      run_started_at = :run_started_at,
-      run_finished_at = :run_finished_at,
-      score = :score,
-      selected_files_json = :selected_files_json,
-      prompt_preview = :prompt_preview,
-      context_summary = :context_summary,
-      execution_mode = :execution_mode,
-      codex_output = :codex_output,
-      diff_output = :diff_output,
-      patch_summary = :patch_summary,
-      lint_status = :lint_status,
-      test_status = :test_status,
-      lint_output = :lint_output,
-      test_output = :test_output,
-      verification_notes = :verification_notes,
-      logs = :logs,
-      error_message = :error_message,
-      lint_command = :lint_command,
-      test_command = :test_command,
-      timeline_json = :timeline_json,
-      failure_signal_json = :failure_signal_json
-    WHERE id = :id
+  title = : title,
+    prompt = : prompt,
+      status = : status,
+        project_id = : project_id,
+          task_kind = : task_kind,
+            repo_path = : repo_path,
+              created_at = : created_at,
+                updated_at = : updated_at,
+                  run_started_at = : run_started_at,
+                    run_finished_at = : run_finished_at,
+                      score = : score,
+                        selected_files_json = : selected_files_json,
+                          prompt_preview = : prompt_preview,
+                            context_summary = : context_summary,
+                              execution_mode = : execution_mode,
+                                codex_output = : codex_output,
+                                  diff_output = : diff_output,
+                                    patch_summary = : patch_summary,
+                                      lint_status = : lint_status,
+                                        test_status = : test_status,
+                                          lint_output = : lint_output,
+                                            test_output = : test_output,
+                                              verification_notes = : verification_notes,
+                                                logs = : logs,
+                                                  error_message = : error_message,
+                                                    lint_command = : lint_command,
+                                                      test_command = : test_command,
+                                                        timeline_json = : timeline_json,
+                                                          failure_signal_json = : failure_signal_json,
+                                                            board_position = : board_position
+    WHERE id = : id
   `).run(taskToParams(next));
 
   return next;
@@ -726,7 +737,7 @@ export function resetTaskForRetry(id: string) {
     lintOutput: "",
     testOutput: "",
     verificationNotes: "Task re-queued. A fresh patch preview will be generated before trust.",
-    logs: `${current.taskKind === "issue" ? "Issue" : current.taskKind === "report" ? "Report" : "Task"} queued for retry. CodexFlow will rescan the repository and generate a fresh patch preview.`,
+    logs: `${current.taskKind === "issue" ? "Issue" : current.taskKind === "report" ? "Report" : "Task"} queued for retry.CodexFlow will rescan the repository and generate a fresh patch preview.`,
     errorMessage: null,
     runStartedAt: null,
     runFinishedAt: null,
@@ -758,4 +769,28 @@ export function getTaskTimeline(id: string) {
     timeline: task.timeline,
     failureSignal: task.failureSignal,
   };
+}
+
+export function moveTask(id: string, status: TaskStatus, boardPosition: number) {
+  const current = getTaskById(id);
+
+  if (!current) {
+    return null;
+  }
+
+  return updateTask(id, {
+    status,
+    boardPosition,
+    timeline: appendTaskEvent(
+      current,
+      createTimelineEvent({
+        phase: "task",
+        kind: "task_created", // reusing task kind for general updates
+        level: "info",
+        title: "Board status updated",
+        detail: `Moved to ${status} on the board.`,
+        createdAt: new Date().toISOString(),
+      })
+    ),
+  });
 }
