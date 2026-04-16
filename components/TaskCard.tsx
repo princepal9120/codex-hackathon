@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { CheckCircle2, Clock3, Files, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSortable, defaultAnimateLayoutChanges } from '@dnd-kit/sortable';
@@ -26,7 +25,7 @@ const animateLayoutChanges: AnimateLayoutChanges = (args) => {
   return defaultAnimateLayoutChanges(args);
 };
 
-export default function TaskCard({ task, isSelected = false, onSelect, isOverlay = false }: TaskCardProps) {
+export default function TaskCard({ task, isSelected = false, onSelect: _onSelect, isOverlay = false }: TaskCardProps) {
   const {
     attributes,
     listeners,
@@ -130,4 +129,3 @@ export default function TaskCard({ task, isSelected = false, onSelect, isOverlay
     </div>
   );
 }
-

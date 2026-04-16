@@ -1,16 +1,31 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Filter, Loader2, Plus, Sparkles } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragOverEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 
 import { fetchProjects, type ProjectRecord } from '@/components/project-api';
 import CreateTaskModal from '@/components/CreateTaskModal';
 import TaskColumn from '@/components/TaskColumn';
+import TaskCard from '@/components/TaskCard';
 import {
   fetchTasks,
   getTaskIdentifier,
   getTaskKindLabel,
+  moveTask,
   type TaskKind,
   type TaskRecord,
   type TaskSource,
@@ -23,6 +38,8 @@ import Shell from '@/components/Shell';
 const columnOrder: TaskStatus[] = ['queued', 'running', 'passed', 'failed', 'needs_review'];
 const taskKindOptions: TaskKind[] = ['issue', 'task', 'report'];
 
+type Columns = Record<TaskStatus, string[]>;
+
 export default function BoardPage(): JSX.Element {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
@@ -34,6 +51,16 @@ export default function BoardPage(): JSX.Element {
   const [kindFilter, setKindFilter] = useState<'all' | TaskKind>('all');
   const [createdTaskId, setCreatedTaskId] = useState<string | null>(null);
   const [fromOnboarding, setFromOnboarding] = useState(false);
+
+  const [columns, setColumns] = useState<Columns>({
+    queued: [],
+    running: [],
+    passed: [],
+    failed: [],
+    needs_review: [],
+  });
+  const [activeTask, setActiveTask] = useState<TaskRecord | null>(null);
+  const isDragging = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -65,30 +92,153 @@ export default function BoardPage(): JSX.Element {
     setFromOnboarding(params.get('from') === 'onboarding');
   }, []);
 
-  const sortedTasks = useMemo(
-    () =>
-      [...tasks].sort((a, b) => {
-        const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        if (Number.isNaN(ta)) return 1;
-        if (Number.isNaN(tb)) return -1;
-        return tb - ta;
-      }),
-    [tasks]
-  );
+  const taskMap = useMemo(() => {
+    const map = new Map<string, TaskRecord>();
+    for (const task of tasks) map.set(task.id, task);
+    return map;
+  }, [tasks]);
 
-  const filteredTasks = useMemo(() => {
-    return sortedTasks.filter((task) => {
-      const matchesProject = projectFilter === 'all' || task.projectId === projectFilter;
-      const matchesKind = kindFilter === 'all' || task.taskKind === kindFilter;
-      return matchesProject && matchesKind;
+  const buildColumns = useCallback((tasksList: TaskRecord[], projFilter: string, kindFilt: string) => {
+    const cols: Columns = { queued: [], running: [], passed: [], failed: [], needs_review: [] };
+
+    // Sort tasks by boardPosition initially before sorting them into columns
+    const sorted = [...tasksList]
+      .filter((task) => {
+        const matchesProject = projFilter === 'all' || task.projectId === projFilter;
+        const matchesKind = kindFilt === 'all' || task.taskKind === kindFilt;
+        return matchesProject && matchesKind;
+      })
+      .sort((a, b) => a.boardPosition - b.boardPosition);
+
+    for (const task of sorted) {
+      if (cols[task.status]) cols[task.status].push(task.id);
+    }
+    return cols;
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging.current) {
+      setColumns(buildColumns(tasks, projectFilter, kindFilter));
+    }
+  }, [tasks, projectFilter, kindFilter, buildColumns]);
+
+  const findColumn = (id: string): TaskStatus | null => {
+    if (columnOrder.includes(id as TaskStatus)) return id as TaskStatus;
+    for (const [status, ids] of Object.entries(columns)) {
+      if (ids.includes(id)) return status as TaskStatus;
+    }
+    return null;
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    isDragging.current = true;
+    const task = taskMap.get(event.active.id as string) ?? null;
+    setActiveTask(task);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    const activeCol = findColumn(activeId);
+    const overCol = findColumn(overId);
+    if (!activeCol || !overCol || activeCol === overCol) return;
+
+    setColumns((prev) => {
+      const oldIds = prev[activeCol].filter((id) => id !== activeId);
+      const newIds = [...prev[overCol]];
+
+      const overIndex = newIds.indexOf(overId);
+      const insertIndex = overIndex >= 0 ? overIndex : newIds.length;
+      newIds.splice(insertIndex, 0, activeId);
+
+      return { ...prev, [activeCol]: oldIds, [overCol]: newIds };
     });
-  }, [kindFilter, projectFilter, sortedTasks]);
+  };
+
+  const computePosition = (ids: string[], activeId: string): number => {
+    const idx = ids.indexOf(activeId);
+    if (idx === -1) return 0;
+
+    const getPos = (id: string) => taskMap.get(id)?.boardPosition ?? 0;
+
+    if (ids.length === 1) return 0;
+    if (idx === 0) return getPos(ids[1]) - 1000;
+    if (idx === ids.length - 1) return getPos(ids[idx - 1]) + 1000;
+    return (getPos(ids[idx - 1]) + getPos(ids[idx + 1])) / 2;
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    isDragging.current = false;
+    setActiveTask(null);
+
+    if (!over) {
+      setColumns(buildColumns(tasks, projectFilter, kindFilter));
+      return;
+    }
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    const activeCol = findColumn(activeId);
+    const overCol = findColumn(overId);
+    if (!activeCol || !overCol) return;
+
+    let finalIds: string[];
+
+    if (activeCol === overCol) {
+      const ids = columns[activeCol];
+      const oldIndex = ids.indexOf(activeId);
+      const newIndex = ids.indexOf(overId);
+      finalIds = oldIndex !== newIndex ? arrayMove(ids, oldIndex, newIndex) : ids;
+      if (oldIndex !== newIndex) {
+        setColumns((prev) => ({ ...prev, [activeCol]: finalIds }));
+      }
+    } else {
+      finalIds = columns[overCol]; // already updated by dragOver
+    }
+
+    const newPosition = computePosition(finalIds, activeId);
+    const currentTask = taskMap.get(activeId);
+
+    if (currentTask && currentTask.status === overCol && currentTask.boardPosition === newPosition) {
+      return;
+    }
+
+    // Optimistically update
+    setTasks((current) =>
+      current.map((t) => (t.id === activeId ? { ...t, status: overCol, boardPosition: newPosition } : t))
+    );
+
+    try {
+      await moveTask(activeId, overCol, newPosition);
+    } catch (e) {
+      // Reset on failure
+      const updated = await fetchTasks();
+      setTasks(updated.tasks);
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const createdTask = useMemo(
     () => (createdTaskId ? tasks.find((task) => task.id === createdTaskId) ?? null : null),
     [createdTaskId, tasks]
   );
+
   let createdTaskMessage: string | null = null;
   if (createdTask) {
     createdTaskMessage = `${createdTask.title} (${getTaskIdentifier(createdTask.id)}) is now on the kanban board.`;
@@ -96,7 +246,10 @@ export default function BoardPage(): JSX.Element {
     createdTaskMessage = `Your starter work item (${getTaskIdentifier(createdTaskId)}) was created and added to the board.`;
   }
   const createdTaskHref = createdTaskId ? `/tasks/${createdTaskId}` : '/board';
-  const isEmptyState = filteredTasks.length === 0 && !message;
+
+  // Total filtered length
+  const totalFilteredCount = Object.values(columns).reduce((acc, curr) => acc + curr.length, 0);
+  const isEmptyState = totalFilteredCount === 0 && !message;
 
   return (
     <Shell>
@@ -104,7 +257,7 @@ export default function BoardPage(): JSX.Element {
         <div>
           <h1 className="text-lg font-bold tracking-tight text-foreground">Task Board</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {loading ? 'Loading…' : `${filteredTasks.length} work items`} · Kanban view
+            {loading ? 'Loading…' : `${totalFilteredCount} work items`} · Kanban view
             {source === 'mock' && ' · Demo data'}
           </p>
         </div>
@@ -190,11 +343,32 @@ export default function BoardPage(): JSX.Element {
             </div>
           </div>
         ) : (
-          <div className="flex h-full gap-4" style={{ minWidth: `${columnOrder.length * 296}px` }}>
-            {columnOrder.map((status) => (
-              <TaskColumn key={status} status={status} tasks={filteredTasks} />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex h-full gap-4" style={{ minWidth: `${columnOrder.length * 296}px` }}>
+              {columnOrder.map((status) => (
+                <TaskColumn
+                  key={status}
+                  status={status}
+                  taskIds={columns[status] || []}
+                  taskMap={taskMap}
+                />
+              ))}
+            </div>
+
+            <DragOverlay dropAnimation={null}>
+              {activeTask ? (
+                <div className="w-[280px] rotate-2 scale-105 opacity-90">
+                  <TaskCard task={activeTask} isOverlay />
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
       </div>
 
