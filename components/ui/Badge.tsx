@@ -4,18 +4,18 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full px-3 py-1 text-[0.68rem] font-medium uppercase tracking-[0.16em] transition-colors focus:outline-none focus:ring-2 focus:ring-[#0f766e]/30 focus:ring-offset-2 focus:ring-offset-[#f6f3ee]",
+  "inline-flex items-center rounded-[var(--radius)] px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.08em] transition-colors focus:outline-none focus:ring-2 focus:ring-ring/40 focus:ring-offset-2 focus:ring-offset-background",
   {
     variants: {
       variant: {
-        default: "border border-[#e4ddd2] bg-white text-[#3d372f]",
-        primary: "border border-transparent bg-[#191713] text-[#fcfaf6]",
-        secondary: "border border-transparent bg-[#f1ece4] text-[#544c41]",
-        queued: "border border-transparent bg-[#f0ebe2] text-[#766d61]",
-        running: "border border-transparent bg-[#fff0d8] text-[#a56b08]",
-        passed: "border border-transparent bg-[#e4f4ec] text-[#277a46]",
-        failed: "border border-transparent bg-[#f8e7e6] text-[#a64646]",
-        warning: "border border-transparent bg-[#efe9fb] text-[#7a4fc8]",
+        default: "border border-border bg-card text-foreground",
+        primary: "border border-transparent bg-primary text-primary-foreground",
+        secondary: "border border-transparent bg-secondary text-secondary-foreground",
+        queued: "border border-transparent bg-muted text-muted-foreground",
+        running: "border border-transparent bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+        passed: "border border-transparent bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+        failed: "border border-transparent bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+        warning: "border border-transparent bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
       },
     },
     defaultVariants: {

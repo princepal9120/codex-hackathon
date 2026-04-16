@@ -10,30 +10,18 @@ interface SurfaceCardProps {
   tone?: "default" | "soft" | "quiet";
 }
 
-export default function SurfaceCard({
-  eyebrow,
-  title,
-  description,
-  children,
-  tone = "default",
-}: SurfaceCardProps) {
+export default function SurfaceCard({ eyebrow, title, description, children, tone = "default" }: SurfaceCardProps) {
   const toneStyles = {
-    default: "border-gray-200 bg-white shadow-lg shadow-gray-900/5",
-    soft: "border-gray-200 bg-gray-50/80",
-    quiet: "border-gray-200 bg-gray-50",
+    default: "border-border bg-card shadow-md",
+    soft: "border-border bg-secondary/60",
+    quiet: "border-border bg-muted",
   };
 
   return (
-    <section className={`rounded-2xl border p-6 ${toneStyles[tone]}`}>
-      {eyebrow && (
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">
-          {eyebrow}
-        </p>
-      )}
-      <h3 className="mt-2 text-lg font-bold text-gray-900">{title}</h3>
-      {description && (
-        <p className="mt-2 text-sm leading-6 text-gray-600">{description}</p>
-      )}
+    <section className={`rounded-lg border p-6 ${toneStyles[tone]}`}>
+      {eyebrow && <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">{eyebrow}</p>}
+      <h3 className="mt-2 text-lg font-bold text-foreground">{title}</h3>
+      {description && <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>}
       {children && <div className="mt-5">{children}</div>}
     </section>
   );

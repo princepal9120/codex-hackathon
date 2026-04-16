@@ -3,9 +3,7 @@
 import { CheckCircle2, CircleDashed, FileSearch, Code2, ShieldCheck, Loader2 } from "lucide-react";
 import type { TaskRecord } from "@/components/task-api";
 
-interface TaskWorkflowPanelProps {
-  task: TaskRecord;
-}
+interface TaskWorkflowPanelProps { task: TaskRecord; }
 
 const steps = [
   { key: "context", label: "Select context", icon: FileSearch, desc: "Scan and rank files" },
@@ -23,7 +21,6 @@ function getStepStatus(task: TaskRecord, key: string) {
     if (key === "prompt" && task.selectedFiles.length > 0) return "active";
     return "pending";
   }
-  // Terminal states
   if (key === "context") return task.selectedFiles.length > 0 ? "done" : "skipped";
   if (key === "prompt") return task.promptPreview ? "done" : "skipped";
   if (key === "patch") return task.diff?.trim() ? "done" : "skipped";
@@ -37,44 +34,40 @@ function getStepStatus(task: TaskRecord, key: string) {
 
 export default function TaskWorkflowPanel({ task }: TaskWorkflowPanelProps) {
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg shadow-gray-900/5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">
-        Pipeline
-      </p>
-      <h3 className="mt-2 text-lg font-bold text-gray-900">Execution workflow</h3>
+    <section className="rounded-lg border border-border bg-card p-6 shadow-md">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Pipeline</p>
+      <h3 className="mt-2 text-lg font-bold text-foreground">Execution workflow</h3>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {steps.map((step) => {
           const status = getStepStatus(task, step.key);
           const Icon = step.icon;
-
-          const statusStyles = {
+          const styles = {
             done: "border-green-200 bg-green-50",
             active: "border-blue-200 bg-blue-50",
             failed: "border-red-200 bg-red-50",
-            pending: "border-gray-200 bg-gray-50",
-            skipped: "border-gray-200 bg-gray-50 opacity-60",
+            pending: "border-border bg-muted",
+            skipped: "border-border bg-muted opacity-60",
           };
-
-          const iconColors = {
+          const iconC = {
             done: "text-green-600",
             active: "text-blue-600",
             failed: "text-red-600",
-            pending: "text-gray-400",
-            skipped: "text-gray-300",
+            pending: "text-muted-foreground",
+            skipped: "text-muted-foreground/50",
           };
 
           return (
-            <div key={step.key} className={`rounded-xl border p-4 transition-all ${statusStyles[status]}`}>
+            <div key={step.key} className={`rounded-[var(--radius)] border p-4 transition-all ${styles[status]}`}>
               <div className="flex items-center justify-between">
-                <Icon className={`h-5 w-5 ${iconColors[status]}`} />
+                <Icon className={`h-5 w-5 ${iconC[status]}`} />
                 {status === "done" && <CheckCircle2 className="h-4 w-4 text-green-500" />}
                 {status === "active" && <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />}
                 {status === "failed" && <span className="text-[10px] font-semibold text-red-600">FAIL</span>}
-                {status === "pending" && <CircleDashed className="h-4 w-4 text-gray-300" />}
+                {status === "pending" && <CircleDashed className="h-4 w-4 text-muted-foreground" />}
               </div>
-              <p className="mt-3 text-sm font-semibold text-gray-900">{step.label}</p>
-              <p className="mt-0.5 text-xs text-gray-500">{step.desc}</p>
+              <p className="mt-3 text-sm font-semibold text-foreground">{step.label}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{step.desc}</p>
             </div>
           );
         })}
