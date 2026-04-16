@@ -16,11 +16,16 @@ export interface TaskRecord {
   status: TaskStatus;
   score: number | null;
   selectedFiles: TaskFile[];
+  codexOutput: string;
   diff: string;
   lintStatus: VerificationStatus;
   testStatus: VerificationStatus;
   logs: string;
   updatedAt: string;
+  createdAt?: string;
+  runStartedAt?: string | null;
+  runFinishedAt?: string | null;
+  errorMessage?: string | null;
   repoPath?: string;
 }
 
@@ -261,16 +266,36 @@ function normalizeTask(raw: unknown): TaskRecord {
     status,
     score: typeof rawScore === "number" ? rawScore : null,
     selectedFiles,
+    codexOutput:
+      (typeof record.codexOutput === "string" && record.codexOutput) ||
+      (typeof record.codex_output === "string" && record.codex_output) ||
+      "",
     diff,
     lintStatus,
     testStatus,
     logs,
+    createdAt:
+      (typeof record.createdAt === "string" && record.createdAt) ||
+      (typeof record.created_at === "string" && record.created_at) ||
+      undefined,
     updatedAt:
       (typeof record.updatedAt === "string" && record.updatedAt) ||
       (typeof record.updated_at === "string" && record.updated_at) ||
       (typeof record.createdAt === "string" && record.createdAt) ||
       (typeof record.created_at === "string" && record.created_at) ||
       new Date().toISOString(),
+    runStartedAt:
+      (typeof record.runStartedAt === "string" && record.runStartedAt) ||
+      (typeof record.run_started_at === "string" && record.run_started_at) ||
+      null,
+    runFinishedAt:
+      (typeof record.runFinishedAt === "string" && record.runFinishedAt) ||
+      (typeof record.run_finished_at === "string" && record.run_finished_at) ||
+      null,
+    errorMessage:
+      (typeof record.errorMessage === "string" && record.errorMessage) ||
+      (typeof record.error_message === "string" && record.error_message) ||
+      null,
     repoPath:
       (typeof record.repoPath === "string" && record.repoPath) ||
       (typeof record.repo_path === "string" && record.repo_path) ||
