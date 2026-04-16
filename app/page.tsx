@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Github, Layers3, PlayCircle, ShieldCheck } from "lucide-react";
+import { ArrowRight, Github, Layers, PlayCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { fetchTasks, formatTaskTimestamp, type TaskRecord, type TaskSource } from "@/components/task-api";
@@ -94,7 +94,7 @@ export default function LandingPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <MetricCard label="Running" value={summary.running} icon={<PlayCircle className="h-4 w-4" />} tone="blue" />
                 <MetricCard label="Passed" value={summary.passed} icon={<ShieldCheck className="h-4 w-4" />} tone="green" />
-                <MetricCard label="Needs Review" value={summary.reviewed} icon={<Layers3 className="h-4 w-4" />} tone="amber" />
+                <MetricCard label="Needs Review" value={summary.reviewed} icon={<Layers className="h-4 w-4" />} tone="amber" />
                 <MetricCard label="Tracked" value={summary.total} icon={<ArrowRight className="h-4 w-4" />} tone="gray" />
               </div>
             </div>
