@@ -75,11 +75,14 @@ function getOAuthConfig(request: Request) {
     throw new GitHubOAuthError('GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.', 503);
   }
 
+  const redirectUri = readRequiredEnv('GITHUB_OAUTH_REDIRECT_URI');
+  const callbackUrl = redirectUri || new URL('/api/github/callback', getBaseUrl(request)).toString();
+
   return {
     clientId,
     clientSecret,
     scope: readRequiredEnv('GITHUB_OAUTH_SCOPE') ?? DEFAULT_GITHUB_SCOPE,
-    callbackUrl: new URL('/api/github/auth/callback', getBaseUrl(request)).toString(),
+    callbackUrl,
   };
 }
 

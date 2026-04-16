@@ -1,851 +1,204 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
-  Bot,
-  Check,
   ChevronLeft,
-  Copy,
-  FileSearch,
-  FolderGit2,
-  Loader2,
-  ShieldCheck,
-  Sparkles,
-  Terminal,
-  TerminalSquare,
-  Workflow,
-} from "lucide-react";
+  Check,
+  Rocket,
+  Zap,
+} from 'lucide-react';
 
-import {
-  createTask,
-  getTaskIdentifier,
-  getTaskKindLabel,
-  type CreateTaskInput,
-  type TaskRecord,
-  type TaskKind,
-} from "@/components/task-api";
-import { createProject, fetchProjects, type ProjectRecord } from "@/components/project-api";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Textarea } from "@/components/ui/Textarea";
-import { cn } from "@/lib/utils";
+import { Button } from '@/components/ui/Button';
+import { cn } from '@/lib/utils';
+import { fetchProjects, createProject } from '@/components/project-api';
+import { createTask } from '@/components/task-api';
 
-const steps = [
-  { label: "Project", title: "Frame the repo" },
-  { label: "Verification", title: "Lock the proof path" },
-  { label: "First item", title: "Shape the request" },
-  { label: "Launch", title: "Create the starter run" },
-] as const;
+// Steps
+import { StepProject } from './steps/StepProject';
+import { StepCLI } from './steps/StepCLI';
+import { StepTask } from './steps/StepTask';
+import { StepLaunch } from './steps/StepLaunch';
 
-const installCommands = [
-  { label: "Check whether Multica is already installed", command: "multica version" },
-  { label: "Install Multica with Homebrew", command: "brew install multica-ai/tap/multica" },
-  { label: "Verify the Codex CLI is available", command: "codex --help" },
-] as const;
+const STEPS = [
+  { label: 'Workspace', title: 'Anchor the project' },
+  { label: 'Integrate CLI', title: 'Connect the runtime' },
+  { label: 'First Task', title: 'Shape the request' },
+  { label: 'Launch', title: 'Execute the run' },
+];
 
-const runtimeCommands = [
-  { label: "Fastest path: configure + authenticate + start daemon", command: "multica setup" },
-  { label: "Authenticate manually", command: "multica login" },
-  { label: "Start the daemon manually", command: "multica daemon start" },
-  { label: "Confirm daemon status and detected agents", command: "multica daemon status" },
-] as const;
+interface OnboardingFlowProps {
+  onComplete?: () => void;
+}
 
-const detectedTools = ["Next.js 14", "TypeScript", "Python", "SQLite", "Codex"] as const;
-const troubleshootingCommands = [
-  { label: "Check current auth state", command: "multica auth status" },
-  { label: "Restart daemon if Codex was not detected", command: "multica daemon stop && multica daemon start" },
-] as const;
-
-const optionalCliOverrides = [
-  'export MULTICA_CODEX_PATH="$(which codex)"',
-  'export MULTICA_CODEX_MODEL="gpt-5.4"',
-] as const;
-const launchCheckpointCommands = [...installCommands.slice(0, 1), ...runtimeCommands.slice(0, 3)] as const;
-
-const starterTemplates = [
-  {
-    id: "review-path",
-    name: "Review-path cleanup",
-    description: "Tighten the proof around an existing surface without widening the product scope.",
-    title: "Improve the failed-state review path on the task detail page",
-    prompt:
-      "Improve the failed-state experience on the task detail page. Keep the diff preview primary, make the retry path clearer, and preserve the existing API contract. Verification should prove the UI still builds cleanly.",
-    outcome: "Great for a first end-to-end run that exercises the core review loop.",
-    taskKind: "issue" as TaskKind,
-  },
-  {
-    id: "feature-polish",
-    name: "Feature polish",
-    description: "Ship one focused product improvement with context selection and verification evidence.",
-    title: "Add a clearer selected-file rationale summary to the board experience",
-    prompt:
-      "Add a clearer summary of why files were selected for a task, surface it on the board or task detail where it improves scanability, and keep the interface serious and proof-oriented. Verify the result with the configured checks.",
-    outcome: "Highlights CodexFlow's repo-aware context differentiator immediately.",
-    taskKind: "task" as TaskKind,
-  },
-  {
-    id: "bug-fix",
-    name: "Bug fix",
-    description: "Investigate one concrete issue and require explicit proof before it can be trusted.",
-    title: "Stabilize stale refresh flashes in the task detail loading state",
-    prompt:
-      "Investigate the task detail loading state so background refreshes do not flash stale or contradictory information. Keep the existing routes and API helpers intact, and verify the change with lint and tests.",
-    outcome: "Useful when you want the first run to look like a real production bug investigation.",
-    taskKind: "issue" as TaskKind,
-  },
-  {
-    id: "operator-report",
-    name: "Operator report",
-    description: "Write or refine onboarding guidance so the Multica + Codex handoff feels concrete and operational.",
-    title: "Document the Multica + Codex onboarding path for repo operators",
-    prompt:
-      "Create or refine onboarding guidance so repo operators can verify the Codex CLI, install Multica if needed, log in, start the daemon, and understand how CodexFlow hands off into the board and task-detail review flow. Keep the output serious, concrete, and proof-oriented.",
-    outcome: "Best when you want the first run to look like an operator-facing report or docs deliverable.",
-    taskKind: "report" as TaskKind,
-  },
-] as const;
-
-const safeDefaults = {
-  repoPath: ".",
-  lintCommand: "npm run lint",
-  testCommand: "python3 -m unittest discover -s tests",
-} satisfies Required<Pick<CreateTaskInput, "repoPath" | "lintCommand" | "testCommand">>;
-
-export default function OnboardingFlow(): JSX.Element {
+export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [projectName, setProjectName] = useState("CodexFlow onboarding");
-  const [repoPath, setRepoPath] = useState(safeDefaults.repoPath);
-  const [reviewOwner, setReviewOwner] = useState("Repo operator");
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(starterTemplates[0].id);
-  const [taskTitle, setTaskTitle] = useState<string>(starterTemplates[0].title);
-  const [taskPrompt, setTaskPrompt] = useState<string>(starterTemplates[0].prompt);
-  const [createdProject, setCreatedProject] = useState<ProjectRecord | null>(null);
-  const [createdTask, setCreatedTask] = useState<TaskRecord | null>(null);
+
+  // State
+  const [projectName, setProjectName] = useState('My Codex Project');
+  const [repoPath, setRepoPath] = useState('.');
+  const [reviewOwner, setReviewOwner] = useState('Project Owner');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('bug-fix');
+  const [taskTitle, setTaskTitle] = useState('Fix sticky header flash on scroll');
+  const [taskPrompt, setTaskPrompt] = useState('Investigate why the header flashes when scrolling fast.');
+
+  // Execution state
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isHandingOff, setIsHandingOff] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const selectedTemplate = useMemo(
-    () => starterTemplates.find((template) => template.id === selectedTemplateId) ?? starterTemplates[0],
-    [selectedTemplateId]
-  );
-  const selectedTaskKindLabel = getTaskKindLabel(selectedTemplate.taskKind);
-  const selectedTaskKindLabelLowerCase = selectedTaskKindLabel.toLowerCase();
-  const trimmedRepoPath = repoPath.trim();
-  const trimmedProjectName = projectName.trim();
-  const trimmedReviewOwner = reviewOwner.trim();
-  const trimmedTaskTitle = taskTitle.trim();
-  const trimmedTaskPrompt = taskPrompt.trim();
-  const canAdvanceProject = trimmedProjectName.length > 0 && trimmedRepoPath.length > 0 && trimmedReviewOwner.length > 0;
-  const canAdvanceTask = trimmedTaskTitle.length > 0 && trimmedTaskPrompt.length > 0;
+  const canContinue = useMemo(() => {
+    if (step === 0) return projectName.trim() && repoPath.trim() && reviewOwner.trim();
+    if (step === 2) return taskTitle.trim() && taskPrompt.trim();
+    return true;
+  }, [step, projectName, repoPath, reviewOwner, taskTitle, taskPrompt]);
 
-  const resetLaunchResult = () => {
-    setCreatedProject(null);
-    setCreatedTask(null);
-    setIsHandingOff(false);
-    setSubmitError(null);
-  };
+  const handleNext = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
+  const handleBack = () => setStep((s) => Math.max(s - 1, 0));
 
-  const handleTemplateSelect = (templateId: string) => {
-    const template = starterTemplates.find((item) => item.id === templateId);
-    if (!template) return;
-
-    setSelectedTemplateId(template.id);
-    setTaskTitle(template.title);
-    setTaskPrompt(template.prompt);
-    resetLaunchResult();
-  };
-
-  const goNext = () => {
-    setStep((current) => Math.min(current + 1, steps.length - 1));
-    setSubmitError(null);
-  };
-
-  const goBack = () => {
-    setStep((current) => Math.max(current - 1, 0));
-    setSubmitError(null);
-  };
-
-  const handleCreateStarterTask = async () => {
-    if (!canAdvanceTask || isSubmitting) {
-      return;
-    }
-
+  const handleLaunch = async () => {
     setIsSubmitting(true);
     setSubmitError(null);
 
     try {
-      const normalizedProjectName = projectName.trim();
-      const normalizedRepoPath = repoPath.trim() || safeDefaults.repoPath;
-      const onboardingProjectDescription = `Onboarding project for ${reviewOwner.trim()} created from the guided CodexFlow setup flow.`;
-
-      let project =
-        (await fetchProjects()).find(
-          (candidate) =>
-            candidate.name.toLowerCase() === normalizedProjectName.toLowerCase() &&
-            candidate.repoPath === normalizedRepoPath
-        ) ?? null;
+      // 1. Create or get project
+      const allProjects = await fetchProjects();
+      let project = allProjects.find(p => p.name === projectName && p.repoPath === repoPath);
 
       if (!project) {
         project = await createProject({
-          name: normalizedProjectName,
-          repoPath: normalizedRepoPath,
-          description: onboardingProjectDescription,
+          name: projectName,
+          repoPath: repoPath,
+          description: `Onboarding project for ${reviewOwner}`,
         });
       }
 
+      // 2. Create task
       const task = await createTask({
-        title: taskTitle.trim(),
-        prompt: taskPrompt.trim(),
+        title: taskTitle,
+        prompt: taskPrompt,
         projectId: project.id,
-        taskKind: selectedTemplate.taskKind,
-        repoPath: normalizedRepoPath,
-        lintCommand: safeDefaults.lintCommand,
-        testCommand: safeDefaults.testCommand,
+        taskKind: 'task',
+        repoPath: repoPath,
+        lintCommand: 'npm run lint',
+        testCommand: 'npm test',
       });
 
-      setCreatedProject(project);
-      setCreatedTask(task);
-      setIsHandingOff(true);
-      router.push(`/board?from=onboarding&createdTaskId=${encodeURIComponent(task.id)}`);
-    } catch (error) {
-      setIsHandingOff(false);
-      setSubmitError(error instanceof Error ? error.message : "Failed to create the starter task.");
-    } finally {
+      // 3. Complete and redirect
+      if (onComplete) onComplete();
+      router.push(`/board?from=onboarding&taskId=${task.id}`);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to launch project.');
       setIsSubmitting(false);
     }
   };
 
   return (
-    <main className="px-6 py-10">
-      <div className="mx-auto grid max-w-7xl gap-8 xl:grid-cols-[0.9fr_1.1fr]">
-        <section className="surface-soft h-fit rounded-[2rem] p-6 sm:p-8 xl:sticky xl:top-8">
-          <p className="font-mono-ui text-[0.68rem] uppercase tracking-[0.28em] text-[#7b8794]">Onboarding</p>
-          <h1 className="font-display mt-4 text-balance text-4xl leading-[0.94] text-[#171717] sm:text-5xl">
-            Bring the first CodexFlow run online with the same guided feel as Multica.
-          </h1>
-          <p className="mt-5 max-w-xl text-base leading-8 text-[#5f6b78]">
-            This onboarding wizard borrows Multica&apos;s step-by-step structure, but it is tuned for CodexFlow&apos;s
-            real workflow: project setup, repo scope, verification defaults, first-item shaping, and a clean handoff
-            into review.
-          </p>
+    <div className="flex flex-col h-full">
+      <div className="flex flex-col lg:flex-row flex-1 gap-8 py-4">
+        {/* Sidebar Progress (Simplified for Modal) */}
+        <aside className="lg:w-48 flex-shrink-0">
+          <nav className="space-y-4">
+            {STEPS.map((s, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className={cn(
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 text-[10px] font-bold transition-all",
+                  i < step ? "bg-emerald-500 border-emerald-500 text-white" :
+                    i === step ? "bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/20" :
+                      "bg-muted/50 border-border text-muted-foreground"
+                )}>
+                  {i < step ? <Check className="h-4 w-4" strokeWidth={3} /> : i + 1}
+                </div>
+                <div className="hidden lg:block pt-0.5">
+                  <p className={cn(
+                    "text-xs font-bold transition-colors",
+                    i <= step ? "text-foreground" : "text-muted-foreground"
+                  )}>{s.label}</p>
+                </div>
+              </div>
+            ))}
+          </nav>
 
-          <div className="mt-7 flex flex-wrap gap-3">
-            <Link href="/">
-              <Button variant="outline">Back to landing</Button>
-            </Link>
-            <Link href="/board">
-              <Button className="gap-2">
-                Open board
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-
-          <div className="mt-8 rounded-[1.6rem] border border-[#e6ded3] bg-white p-5 shadow-[0_16px_30px_rgba(31,24,18,0.05)]">
-            <p className="font-mono-ui text-[0.68rem] uppercase tracking-[0.24em] text-[#8b8378]">Guided steps</p>
-            <div className="mt-5 space-y-4">
-              {steps.map((item, index) => {
-                const isActive = index === step;
-                const isComplete = index < step || (index === step && createdTask && index === steps.length - 1);
-                let stepStatusClassName =
-                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors border-[#ddd4c8] bg-[#faf6f0] text-[#8c8377]";
-
-                if (isComplete) {
-                  stepStatusClassName =
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors border-[#1f7a68] bg-[#e7f6f0] text-[#14594c]";
-                } else if (isActive) {
-                  stepStatusClassName =
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors border-[#1f1c17] bg-[#1f1c17] text-white";
-                }
-
-                return (
-                  <div key={item.label} className="flex items-start gap-3">
-                    <div className={stepStatusClassName}>
-                      {isComplete ? <Check className="h-4 w-4" /> : index + 1}
-                    </div>
-                    <div className="pt-0.5">
-                      <p className={cn("text-sm font-semibold", isActive ? "text-[#1f1c17]" : "text-[#6f675d]")}>{item.label}</p>
-                      <p className="mt-1 text-sm leading-6 text-[#8b8378]">{item.title}</p>
-                    </div>
-                  </div>
-                );
-              })}
+          <div className="mt-8 rounded-2xl bg-muted/30 border border-border p-4 space-y-3 hidden lg:block">
+            <div className="flex items-center gap-2 text-primary">
+              <Zap className="h-3 w-3 fill-primary/20" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Runtime</span>
+            </div>
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-muted-foreground">Daemon</span>
+              <span className="flex items-center gap-1 font-bold text-emerald-600">
+                <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
+                Online
+              </span>
             </div>
           </div>
+        </aside>
 
-          <div className="mt-8 rounded-[1.6rem] border border-[#e6ded3] bg-[#fcfaf6] p-5">
-            <p className="font-mono-ui text-[0.68rem] uppercase tracking-[0.24em] text-[#8b8378]">Runtime cues</p>
-            <div className="mt-4 space-y-3">
-              {installCommands.slice(0, 2).map((item) => (
-                <div key={item.command} className="rounded-[1.2rem] border border-[#e6ded3] bg-white px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#8b8378]">{item.label}</p>
-                  <code className="mt-2 block font-mono-ui text-sm text-[#1f1c17]">{item.command}</code>
-                </div>
-              ))}
-            </div>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {detectedTools.map((tool) => (
-                <span
-                  key={tool}
-                  className="rounded-full border border-[#d8eee7] bg-[#effaf6] px-3 py-1 text-xs uppercase tracking-[0.16em] text-[#21695c]"
-                >
-                  {tool}
-                </span>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="surface-panel rounded-[2rem] p-6 sm:p-8">
-          <ProgressStepper activeStep={step} hasCompletion={Boolean(createdTask)} />
-
-          {step === 0 ? (
-            <StepShell
-              eyebrow="Step 1"
-              title="Create the CodexFlow project context"
-              description="Multica starts by anchoring the workspace. Here, we anchor the project, the repo target, and the human who will judge the first run."
-            >
-              <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-                <div className="space-y-5">
-                  <Field label="Project name" helper="This is persisted as a real CodexFlow project before the starter item is created.">
-                    <Input
-                      value={projectName}
-                      onChange={(event) => {
-                        setProjectName(event.target.value);
-                        resetLaunchResult();
-                      }}
-                      placeholder="CodexFlow onboarding"
-                    />
-                  </Field>
-                  <Field label="Repository path" helper="Must stay inside the configured repo root. Use `.` for the current project.">
-                    <Input
-                      value={repoPath}
-                      onChange={(event) => {
-                        setRepoPath(event.target.value);
-                        resetLaunchResult();
-                      }}
-                      placeholder="."
-                    />
-                  </Field>
-                  <Field label="Review owner" helper="Who is responsible for reviewing the patch preview and verification evidence?">
-                    <Input
-                      value={reviewOwner}
-                      onChange={(event) => {
-                        setReviewOwner(event.target.value);
-                        resetLaunchResult();
-                      }}
-                      placeholder="Repo operator"
-                    />
-                  </Field>
-                </div>
-
-                <InfoPanel
-                  title="What this step controls"
-                  body="CodexFlow creates or reuses a real project here, then attaches the starter issue, report, or implementation task to that project before handing off into the board."
-                  items={[
-                    "Scope the first run to the right repo root.",
-                    "Keep the review owner explicit from the start.",
-                    "Make the onboarding handoff land in a project-backed workflow, not a disconnected demo.",
-                  ]}
-                />
-              </div>
-
-              <StepActions>
-                <Link href="/">
-                  <Button variant="ghost">Cancel</Button>
-                </Link>
-                <Button onClick={goNext} disabled={!canAdvanceProject} className="gap-2">
-                  Continue to verification
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </StepActions>
-            </StepShell>
-          ) : null}
-
-          {step === 1 ? (
-            <StepShell
-              eyebrow="Step 2"
-              title="Lock the proof path before the first run"
-              description="This mirrors Multica&apos;s CLI_INSTALL + CLI_AND_DAEMON flow: verify the CLIs, authenticate, start the daemon, and make the proof path explicit before any patch preview earns trust."
-            >
-              <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-                <div className="space-y-4">
-                  <ReadonlyStat
-                    icon={<FolderGit2 className="h-4 w-4" />}
-                    label="Repo target"
-                    value={trimmedRepoPath || "."}
-                    helper="Stored on the task and validated against the configured root."
-                  />
-                  <ReadonlyStat
-                    icon={<ShieldCheck className="h-4 w-4" />}
-                    label="Lint command"
-                    value={safeDefaults.lintCommand}
-                    helper="Locked to the configured safe command."
-                  />
-                  <ReadonlyStat
-                    icon={<TerminalSquare className="h-4 w-4" />}
-                    label="Test command"
-                    value={safeDefaults.testCommand}
-                    helper="Used to prove the patch preview still respects the codebase."
-                  />
-                </div>
-
-                <div className="rounded-[1.5rem] border border-[#e6ded3] bg-[#faf6f0] p-5">
-                  <p className="font-mono-ui text-[0.68rem] uppercase tracking-[0.24em] text-[#8b8378]">Detected stack</p>
-                  <div className="mt-4 flex flex-wrap gap-2.5">
-                    {detectedTools.map((tool) => (
-                      <span key={tool} className="rounded-full border border-[#e3ddd2] bg-white px-3 py-1 text-xs text-[#5b5348]">
-                        {tool}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-6 space-y-3">
-                    <ChecklistRow>Patch preview remains review-first, not auto-apply.</ChecklistRow>
-                    <ChecklistRow>Verification stays visible and explicit from the first run.</ChecklistRow>
-                    <ChecklistRow>Commands stay constrained to the safe configured defaults.</ChecklistRow>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
-                <div className="rounded-[1.5rem] border border-[#e6ded3] bg-white p-5 shadow-sm">
-                  <div className="flex items-center gap-2 text-[#746b60]">
-                    <Terminal className="h-4 w-4" />
-                    <p className="text-[0.68rem] uppercase tracking-[0.24em]">Install + connect the runtime</p>
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    {installCommands.map((item, index) => (
-                      <CommandBlock key={item.command} label={`${index + 1}. ${item.label}`} command={item.command} />
-                    ))}
-                    {runtimeCommands.map((item, index) => (
-                      <CommandBlock key={item.command} label={`${index + installCommands.length + 1}. ${item.label}`} command={item.command} />
-                    ))}
-                  </div>
-                  <p className="mt-4 text-sm leading-6 text-[#6f675d]">
-                    This mirrors Multica&apos;s onboarding rhythm directly: check the CLI, install if needed, authenticate,
-                    start the daemon, confirm detected agents, then let the CodexFlow board/detail flow prove the handoff.
-                  </p>
-                </div>
-
-                <div className="rounded-[1.5rem] border border-[#e6ded3] bg-[#faf6f0] p-5">
-                  <div className="flex items-center gap-2 text-[#746b60]">
-                    <Bot className="h-4 w-4" />
-                    <p className="text-[0.68rem] uppercase tracking-[0.24em]">Troubleshooting + Codex overrides</p>
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    {troubleshootingCommands.map((item) => (
-                      <CommandBlock key={item.command} label={item.label} command={item.command} subtle />
-                    ))}
-                    {optionalCliOverrides.map((command) => (
-                      <CommandBlock key={command} label="Optional environment override" command={command} subtle />
-                    ))}
-                  </div>
-                  <div className="mt-5 space-y-3">
-                    <ChecklistRow>`multica setup` is the fastest path when you want the exact Cloud quickstart flow from Multica.</ChecklistRow>
-                    <ChecklistRow>If `codex` is missing from daemon status, restart the daemon after fixing PATH or `MULTICA_CODEX_PATH`.</ChecklistRow>
-                    <ChecklistRow>Use CodexFlow&apos;s starter item to prove repo context, prompt preview, and verification in one pass.</ChecklistRow>
-                  </div>
-                </div>
-              </div>
-
-              <StepActions>
-                <Button variant="ghost" onClick={goBack} className="gap-2">
-                  <ChevronLeft className="h-4 w-4" />
-                  Back
-                </Button>
-                <Button onClick={goNext} className="gap-2">
-                  Continue to first task
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </StepActions>
-            </StepShell>
-          ) : null}
-
-          {step === 2 ? (
-            <StepShell
-              eyebrow="Step 3"
-              title="Shape the first work item like a real operator"
-              description="Instead of creating an agent like Multica, CodexFlow lets you choose a starter issue, task, or report pattern, then edit the exact request that will drive context selection and verification."
-            >
-              <div className="space-y-6">
-                <div className="grid gap-4 lg:grid-cols-3">
-                  {starterTemplates.map((template) => {
-                    const isSelected = template.id === selectedTemplateId;
-                    let templateCardClassName = "rounded-[1.5rem] border p-5 text-left transition-all border-[#e6ded3] bg-white text-[#1f1c17] hover:border-[#cfc5b8] hover:bg-[#fcfaf6]";
-                    let templateKindClassName = "mt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8b8378]";
-                    let templateDescriptionClassName = "mt-2 text-sm leading-6 text-[#6f675d]";
-                    let templateOutcomeClassName = "mt-4 text-xs leading-5 text-[#8b8378]";
-
-                    if (isSelected) {
-                      templateCardClassName =
-                        "rounded-[1.5rem] border p-5 text-left transition-all border-[#1f1c17] bg-[#1f1c17] text-white shadow-[0_18px_40px_rgba(31,24,18,0.18)]";
-                      templateKindClassName = "mt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65";
-                      templateDescriptionClassName = "mt-2 text-sm leading-6 text-white/82";
-                      templateOutcomeClassName = "mt-4 text-xs leading-5 text-white/65";
-                    }
-
-                    return (
-                      <button
-                        key={template.id}
-                        type="button"
-                        onClick={() => handleTemplateSelect(template.id)}
-                        className={templateCardClassName}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-semibold">{template.name}</p>
-                          {isSelected ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4 text-[#8b8378]" />}
-                        </div>
-                        <p className={templateKindClassName}>{getTaskKindLabel(template.taskKind)}</p>
-                        <p className={templateDescriptionClassName}>{template.description}</p>
-                        <p className={templateOutcomeClassName}>{template.outcome}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-                  <div className="space-y-5">
-                    <Field label={`${selectedTaskKindLabel} title`} helper="Short board-facing summary for the first run.">
-                      <Input
-                        value={taskTitle}
-                        onChange={(event) => {
-                          setTaskTitle(event.target.value);
-                          resetLaunchResult();
-                        }}
-                        placeholder="Improve the failed-state review path"
-                      />
-                    </Field>
-                    <Field label={`${selectedTaskKindLabel} prompt`} helper="Describe the behavior, constraints, and what good verification should prove.">
-                      <Textarea
-                        value={taskPrompt}
-                        onChange={(event) => {
-                          setTaskPrompt(event.target.value);
-                          resetLaunchResult();
-                        }}
-                        placeholder="Explain what the first run should improve and how trust should be earned."
-                      />
-                    </Field>
-                  </div>
-
-                  <InfoPanel
-                    title="Starter template summary"
-                    body={selectedTemplate.outcome}
-                    items={[
-                      `Project: ${projectName}`,
-                      `Item type: ${selectedTaskKindLabel}`,
-                      `Review owner: ${reviewOwner}`,
-                      `Repo target: ${repoPath || "."}`,
-                    ]}
-                  />
-                </div>
-              </div>
-
-              <StepActions>
-                <Button variant="ghost" onClick={goBack} className="gap-2">
-                  <ChevronLeft className="h-4 w-4" />
-                  Back
-                </Button>
-                <Button onClick={goNext} disabled={!canAdvanceTask} className="gap-2">
-                  Review launch plan
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </StepActions>
-            </StepShell>
-          ) : null}
-
-          {step === 3 ? (
-            <StepShell
-              eyebrow="Step 4"
-              title={createdTask ? "Starter run created" : "Launch the first repo-aware run"}
-              description={
-                createdTask
-                  ? "CodexFlow is handing you straight into the kanban board so the created work item is visible immediately."
-                  : "Review the exact project-backed payload that will be sent to the API, then create the starter run and open the kanban board in one shot."
-              }
-            >
-              <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-                <div className="space-y-4">
-                  <ReadonlyStat
-                    icon={<Workflow className="h-4 w-4" />}
-                    label="Project"
-                    value={trimmedProjectName}
-                    helper={`Reviewed by ${trimmedReviewOwner}`}
-                  />
-                  <ReadonlyStat
-                    icon={<Sparkles className="h-4 w-4" />}
-                    label="Item type"
-                    value={selectedTaskKindLabel}
-                    helper="Starter template controls whether the first run lands as an issue, task, or report."
-                  />
-                  <ReadonlyStat
-                    icon={<FileSearch className="h-4 w-4" />}
-                    label={`${selectedTaskKindLabel} title`}
-                    value={trimmedTaskTitle}
-                    helper="This is the board-facing summary for the starter run."
-                  />
-                  <div className="rounded-[1.5rem] border border-[#e6ded3] bg-white p-5 shadow-sm">
-                    <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[#8b8378]">Prompt preview</p>
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[#40392f]">{trimmedTaskPrompt}</p>
-                  </div>
-                </div>
-
-                <div className="rounded-[1.5rem] border border-[#e6ded3] bg-[#faf6f0] p-5">
-                  <p className="font-mono-ui text-[0.68rem] uppercase tracking-[0.24em] text-[#8b8378]">What happens next</p>
-                  <div className="mt-5 space-y-3">
-                    <ChecklistRow>The onboarding flow creates or reuses a real project through `/api/projects` before launching the first work item.</ChecklistRow>
-                    <ChecklistRow>CodexFlow selects relevant files, builds a prompt preview, and records the exact work item type.</ChecklistRow>
-                    <ChecklistRow>The created item appears in the shared kanban board immediately after setup completes.</ChecklistRow>
-                  </div>
-
-                  <div className="mt-6 rounded-[1.25rem] border border-[#e3ddd2] bg-white px-4 py-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#8b8378]">Verification defaults</p>
-                    <div className="mt-3 space-y-2 text-sm text-[#4f473d]">
-                      <p>Repo: {trimmedRepoPath || "."}</p>
-                      <p>Lint: {safeDefaults.lintCommand}</p>
-                      <p>Tests: {safeDefaults.testCommand}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-[1.25rem] border border-[#e3ddd2] bg-white px-4 py-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#8b8378]">CLI checkpoints</p>
-                    <div className="mt-3 space-y-2">
-                      {launchCheckpointCommands.map((item) => (
-                        <CommandBlock key={item.command} label={item.label} command={item.command} compact />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {submitError ? (
-                <div className="mt-6 rounded-[1.2rem] border border-[#efc4bc] bg-[#fff1ee] px-4 py-3 text-sm text-[#9f4e42]">
-                  {submitError}
-                </div>
-              ) : null}
-
-              {createdTask ? (
-                <div className="mt-6 rounded-[1.6rem] border border-[#d9eee8] bg-[#f2fbf7] p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#dff5ed] text-[#176757]">
-                      {isHandingOff ? <Loader2 className="h-6 w-6 animate-spin" /> : <Check className="h-6 w-6" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[#4b8a78]">
-                        {isHandingOff ? "Opening board" : "Task created"}
-                      </p>
-                      <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[#184b40]">{getTaskIdentifier(createdTask.id)}</h3>
-                      <p className="mt-3 text-sm leading-7 text-[#326457]">
-                        {createdTask.title} is now queued in the live pipeline as a {getTaskKindLabel(createdTask.taskKind).toLowerCase()} in{" "}
-                        {createdProject?.name ?? "the selected project"}. CodexFlow is sending you directly to the kanban board so you can see the item in the shared flow immediately.
-                      </p>
-                      <div className="mt-5 rounded-[1.2rem] border border-[#d4ebe3] bg-white px-4 py-4 text-sm text-[#3f5f56]">
-                        <div className="flex items-center gap-2">
-                          <Bot className="h-4 w-4" />
-                          <span>Status: {createdTask.status.replace("_", " ")}</span>
-                        </div>
-                        {createdProject ? <p className="mt-2">Project: {createdProject.name}</p> : null}
-                        {isHandingOff ? <p className="mt-2">Redirecting to `/board`…</p> : null}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <StepActions>
-                <Button variant="ghost" onClick={goBack} className="gap-2" disabled={isSubmitting}>
-                  <ChevronLeft className="h-4 w-4" />
-                  Back
-                </Button>
-                {createdTask ? null : (
-                  <Button onClick={handleCreateStarterTask} disabled={!canAdvanceTask || isSubmitting || isHandingOff} className="gap-2">
-                    {isSubmitting
-                      ? `Creating starter ${selectedTaskKindLabelLowerCase}…`
-                      : `Create starter ${selectedTaskKindLabelLowerCase} and open board`}
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                )}
-              </StepActions>
-            </StepShell>
-          ) : null}
-        </section>
-      </div>
-    </main>
-  );
-}
-
-function ProgressStepper({
-  activeStep,
-  hasCompletion,
-}: {
-  activeStep: number;
-  hasCompletion: boolean;
-}): JSX.Element {
-  return (
-    <div className="mb-8 flex flex-wrap items-center gap-2 border-b border-[#ece4d8] pb-6">
-      {steps.map((item, index) => {
-        const isComplete = index < activeStep || (index === steps.length - 1 && hasCompletion);
-        const isActive = index === activeStep;
-        let stepIndicatorClassName =
-          "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors bg-[#f2ece4] text-[#8b8378]";
-        let stepLabelClassName = "text-sm text-[#8b8378]";
-
-        if (isComplete) {
-          stepIndicatorClassName =
-            "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors bg-[#1f1c17] text-white";
-          stepLabelClassName = "text-sm text-[#1f1c17]";
-        } else if (isActive) {
-          stepIndicatorClassName =
-            "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors border border-[#1f1c17] bg-white text-[#1f1c17]";
-          stepLabelClassName = "text-sm text-[#1f1c17]";
-        }
-
-        return (
-          <div key={item.label} className="flex items-center gap-2">
-            <div className="flex items-center gap-2">
-              <div className={stepIndicatorClassName}>
-                {isComplete ? <Check className="h-3.5 w-3.5" /> : index + 1}
-              </div>
-              <span className={stepLabelClassName}>{item.label}</span>
-            </div>
-            {index < steps.length - 1 ? <div className="h-px w-8 bg-[#e4dbcf]" /> : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function StepShell({
-  eyebrow,
-  title,
-  description,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children: ReactNode;
-}): JSX.Element {
-  return (
-    <section>
-      <p className="font-mono-ui text-[0.68rem] uppercase tracking-[0.24em] text-[#8b8378]">{eyebrow}</p>
-      <h2 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-[#1f1c17] sm:text-[2.3rem]">{title}</h2>
-      <p className="mt-4 max-w-3xl text-base leading-8 text-[#6f675d]">{description}</p>
-      <div className="mt-8">{children}</div>
-    </section>
-  );
-}
-
-function Field({ label, helper, children }: { label: string; helper: string; children: ReactNode }): JSX.Element {
-  return (
-    <label className="grid gap-2">
-      <div>
-        <p className="text-sm font-medium text-[#1f1c17]">{label}</p>
-        <p className="mt-1 text-xs leading-5 text-[#8b8378]">{helper}</p>
-      </div>
-      {children}
-    </label>
-  );
-}
-
-function InfoPanel({ title, body, items }: { title: string; body: string; items: string[] }): JSX.Element {
-  return (
-    <div className="rounded-[1.5rem] border border-[#e6ded3] bg-[#faf6f0] p-5">
-      <p className="text-lg font-semibold text-[#1f1c17]">{title}</p>
-      <p className="mt-3 text-sm leading-7 text-[#6f675d]">{body}</p>
-      <div className="mt-5 space-y-3">
-        {items.map((item) => (
-          <ChecklistRow key={item}>{item}</ChecklistRow>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ChecklistRow({ children }: { children: ReactNode }): JSX.Element {
-  return (
-    <div className="flex items-start gap-3 rounded-[1rem] border border-[#e6ded3] bg-white px-4 py-3 text-sm text-[#4d463d]">
-      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#eff7f4] text-[#176757]">
-        <Check className="h-3.5 w-3.5" />
-      </div>
-      <div className="leading-6">{children}</div>
-    </div>
-  );
-}
-
-function ReadonlyStat({
-  icon,
-  label,
-  value,
-  helper,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  helper: string;
-}): JSX.Element {
-  return (
-    <div className="rounded-[1.5rem] border border-[#e6ded3] bg-white p-5 shadow-sm">
-      <div className="flex items-center gap-2 text-[#746b60]">
-        {icon}
-        <p className="text-[0.68rem] uppercase tracking-[0.24em]">{label}</p>
-      </div>
-      <p className="mt-3 font-mono-ui text-sm text-[#1f1c17]">{value}</p>
-      <p className="mt-3 text-sm leading-6 text-[#857c71]">{helper}</p>
-    </div>
-  );
-}
-
-function StepActions({ children }: { children: ReactNode }): JSX.Element {
-  return <div className="mt-8 flex flex-wrap items-center justify-between gap-3">{children}</div>;
-}
-
-function CommandBlock({
-  label,
-  command,
-  compact = false,
-  subtle = false,
-}: {
-  label: string;
-  command: string;
-  compact?: boolean;
-  subtle?: boolean;
-}): JSX.Element {
-  const [copied, setCopied] = useState(false);
-
-  return (
-    <div
-      className={cn(
-        "rounded-[1.2rem] border px-4 py-3",
-        subtle ? "border-[#eadfce] bg-[#fffdf9]" : "border-[#e6ded3] bg-white",
-        compact ? "py-2.5" : "py-3"
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5efe7] text-[#6f675d]">
-          <Terminal className="h-4 w-4" />
+        {/* Content Area */}
+        <div className="flex-1 min-h-[400px]">
+          {step === 0 && (
+            <StepProject
+              projectName={projectName} setProjectName={setProjectName}
+              repoPath={repoPath} setRepoPath={setRepoPath}
+              reviewOwner={reviewOwner} setReviewOwner={setReviewOwner}
+            />
+          )}
+          {step === 1 && <StepCLI />}
+          {step === 2 && (
+            <StepTask
+              selectedTemplateId={selectedTemplateId} setSelectedTemplateId={setSelectedTemplateId}
+              taskTitle={taskTitle} setTaskTitle={setTaskTitle}
+              taskPrompt={taskPrompt} setTaskPrompt={setTaskPrompt}
+            />
+          )}
+          {step === 3 && (
+            <StepLaunch
+              projectName={projectName}
+              repoPath={repoPath}
+              reviewOwner={reviewOwner}
+              taskTitle={taskTitle}
+              taskPrompt={taskPrompt}
+              isSubmitting={isSubmitting}
+              submitError={submitError}
+            />
+          )}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs uppercase tracking-[0.18em] text-[#8b8378]">{label}</p>
-          <code className="mt-2 block break-all font-mono-ui text-sm leading-6 text-[#1f1c17]">{command}</code>
-        </div>
-        <button
-          type="button"
-          onClick={async () => {
-            await navigator.clipboard.writeText(command);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1800);
-          }}
-          className="rounded-full border border-[#e6ded3] bg-white p-2 text-[#6f675d] transition-colors hover:border-[#cfc5b8] hover:text-[#1f1c17]"
-          aria-label={`Copy command: ${command}`}
+      </div>
+
+      {/* Footer Actions */}
+      <div className="mt-auto pt-6 border-t border-border flex items-center justify-between">
+        <Button
+          variant="ghost"
+          onClick={handleBack}
+          disabled={step === 0 || isSubmitting}
+          className="gap-2 h-10 px-4 font-bold"
         >
-          {copied ? <Check className="h-4 w-4 text-[#176757]" /> : <Copy className="h-4 w-4" />}
-        </button>
+          <ChevronLeft className="h-4 w-4" />
+          Back
+        </Button>
+
+        <div className="flex items-center gap-4">
+          {step < STEPS.length - 1 ? (
+            <Button
+              onClick={handleNext}
+              disabled={!canContinue}
+              className="gap-2 h-10 px-6 font-extrabold shadow-lg shadow-primary/20"
+            >
+              Continue
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              onClick={handleLaunch}
+              disabled={isSubmitting}
+              className="gap-2 h-10 px-8 font-extrabold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20"
+            >
+              {isSubmitting ? 'Launching...' : 'Launch Project'}
+              <Rocket className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

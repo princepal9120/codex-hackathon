@@ -26,11 +26,13 @@ import {
   type TaskRecord,
   type TaskSource,
 } from "@/components/task-api";
+import OnboardingModal from "@/components/OnboardingModal";
 
 export default function LandingPage() {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [source, setSource] = useState<TaskSource>("api");
   const [loading, setLoading] = useState(true);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -81,12 +83,13 @@ export default function LandingPage() {
           </p>
 
           <div className="fade-up fade-up-delay-3 opacity-0 mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Link href="/onboarding">
-              <Button className="h-12 bg-emerald-600 hover:bg-emerald-700 text-white gap-2 px-6 text-base font-semibold">
-                <Github className="h-4 w-4" />
-                Onboard Project
-              </Button>
-            </Link>
+            <Button
+              onClick={() => setIsOnboardingOpen(true)}
+              className="h-12 bg-emerald-600 hover:bg-emerald-700 text-white gap-2 px-6 text-base font-semibold"
+            >
+              <Github className="h-4 w-4" />
+              Onboard Project
+            </Button>
             <Link href="/board">
               <Button variant="outline" className="h-12 gap-2 px-6 text-base font-semibold">
                 View Demo
@@ -200,7 +203,7 @@ export default function LandingPage() {
                       <div className="mt-6 rounded-[var(--radius)] border border-border bg-muted p-4">
                         <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Patch preview</p>
                         <pre className="overflow-hidden text-xs font-mono leading-5">
-                          {featuredTask.diff.split("\n").slice(0, 8).map((line, i) => (
+                          {featuredTask.diff.split("\n").slice(0, 8).map((line: string, i: number) => (
                             <span key={i} className={`block px-2 rounded ${line.startsWith("+") ? "diff-add" : line.startsWith("-") ? "diff-remove" : line.startsWith("@@") ? "diff-header" : "text-muted-foreground"}`}>
                               {line}
                             </span>
@@ -258,6 +261,7 @@ export default function LandingPage() {
           </div>
         </footer>
       </div>
+      <OnboardingModal open={isOnboardingOpen} onOpenChange={setIsOnboardingOpen} />
     </main>
   );
 }

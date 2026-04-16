@@ -8,7 +8,7 @@ import {
 
 export const runtime = "nodejs";
 
-const GITHUB_STATE_COOKIE = "codexflow_github_oauth_state";
+const GITHUB_STATE_COOKIE = "codexflow_github_state";
 
 export async function GET(request: Request) {
   if (!getGitHubOAuthConfig()) {

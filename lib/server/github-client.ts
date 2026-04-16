@@ -107,7 +107,8 @@ export function createGitHubOAuthState() {
 
 export function getGitHubRedirectUri(origin: string) {
   const configured = process.env.GITHUB_OAUTH_REDIRECT_URI?.trim();
-  return configured || `${origin}/api/github/callback`;
+  if (configured && configured.length > 0) return configured;
+  return `${origin}/api/github/callback`;
 }
 
 export function getGitHubAuthorizeUrl(origin: string, state: string) {

@@ -10,7 +10,7 @@ import { upsertGitHubConnection } from "@/lib/server/github-store";
 
 export const runtime = "nodejs";
 
-const GITHUB_STATE_COOKIE = "codexflow_github_oauth_state";
+const GITHUB_STATE_COOKIE = "codexflow_github_state";
 
 function redirectWithStatus(request: Request, status: string, message?: string) {
   const url = new URL("/projects", request.url);
