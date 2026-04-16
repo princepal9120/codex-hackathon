@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, FolderPlus, Github, Layers, Loader2, Plus, Workflow } from 'lucide-react';
 
@@ -20,7 +20,7 @@ const initialForm = {
 
 type SetupStep = 'unauthenticated' | 'repo-list' | 'configure';
 
-export default function ProjectsPage() {
+function ProjectsPageContent() {
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,6 +35,18 @@ export default function ProjectsPage() {
   const [repos, setRepos] = useState<GitHubRepository[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [githubConfigured, setGitHubConfigured] = useState(true);
+
+  const loadRepositories = async () => {
+    setLoadingRepos(true);
+    try {
+      const data = await fetchRepositories();
+      setRepos(data);
+    } catch {
+      setError("Failed to fetch repositories.");
+    } finally {
+      setLoadingRepos(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -66,18 +78,6 @@ export default function ProjectsPage() {
     };
   }, []);
 
-  const loadRepositories = async () => {
-    setLoadingRepos(true);
-    try {
-      const data = await fetchRepositories();
-      setRepos(data);
-    } catch {
-      setError("Failed to fetch repositories.");
-    } finally {
-      setLoadingRepos(false);
-    }
-  };
-
   useEffect(() => {
     const githubError = searchParams.get('github_error');
     const githubConnected = searchParams.get('github_connected');
@@ -90,9 +90,17 @@ export default function ProjectsPage() {
       setError(githubError);
     } else if (githubConnected) {
       setError(null);
+      setSetupStep('repo-list');
+      void loadRepositories();
     }
 
-    router.replace(pathname, { scroll: false });
+    // Clear params properly using window.history
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('github_error');
+      url.searchParams.delete('github_connected');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    }
   }, [pathname, router, searchParams]);
 
   const handleConnectGitHub = () => {
@@ -295,6 +303,20 @@ export default function ProjectsPage() {
         </div>
       </div>
     </Shell>
+  );
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={
+      <Shell>
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </Shell>
+    }>
+      <ProjectsPageContent />
+    </Suspense>
   );
 }
 
