@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Github, Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -87,8 +87,8 @@ export default function OnboardingPage() {
                   <div className="flex flex-col items-center gap-2">
                     <div
                       className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold shadow-sm transition-all duration-300 ${i <= step
-                          ? 'bg-primary text-primary-foreground scale-110'
-                          : 'bg-muted text-muted-foreground'
+                        ? 'bg-primary text-primary-foreground scale-110'
+                        : 'bg-muted text-muted-foreground'
                         }`}
                     >
                       {i < step ? (
