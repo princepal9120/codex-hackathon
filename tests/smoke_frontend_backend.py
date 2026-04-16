@@ -172,6 +172,20 @@ class FrontendBackendSmokeTests(unittest.TestCase):
             self.assertEqual(created_task["taskKind"], "issue")
             self.assertIn(created_task["status"], {"queued", "running"})
 
+            moved_payload = request_json(
+                f"{server.base_url}/api/tasks/{task_id}/move",
+                method="POST",
+                data={
+                    "status": "running",
+                    "position": 1234,
+                },
+                expected_status=200,
+            )
+            moved_task = require_task(moved_payload)
+            self.assertEqual(moved_task["id"], task_id)
+            self.assertEqual(moved_task["status"], "running")
+            self.assertEqual(moved_task["boardPosition"], 1234)
+
             run_payload = request_json(
                 f"{server.base_url}/api/tasks/{task_id}/run",
                 method="POST",
