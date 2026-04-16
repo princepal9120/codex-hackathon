@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { type TaskRecord, formatTaskTimestamp, getConfidenceLabel } from "@/components/task-api";
+import { AlertTriangle, Clock3 } from "lucide-react";
+
+import {
+  formatTaskTimestamp,
+  getConfidenceLabel,
+  getFailureClassificationLabel,
+  type TaskRecord,
+} from "@/components/task-api";
 import { Badge } from "@/components/ui/Badge";
 import StatusBadge from "@/components/StatusBadge";
 
@@ -21,8 +28,22 @@ export default function TaskCard({ task }: TaskCardProps) {
           {task.repoPath ? (
             <p className="mb-4 text-[11px] uppercase tracking-wide text-gray-400">Repo: {task.repoPath}</p>
           ) : null}
-          {task.contextSummary ? (
-            <p className="mb-4 line-clamp-3 text-xs text-gray-500">{task.contextSummary}</p>
+          {task.statusSummary ? (
+            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Status signal</p>
+              <p className="mt-2 line-clamp-3 text-xs text-gray-700">{task.statusSummary}</p>
+            </div>
+          ) : null}
+          {task.failureSignal ? (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-red-800">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <p className="text-[11px] font-semibold uppercase tracking-wide">
+                  {getFailureClassificationLabel(task.failureSignal.classification)}
+                </p>
+              </div>
+              <p className="mt-2 line-clamp-2 text-xs">{task.failureSignal.summary}</p>
+            </div>
           ) : null}
         </div>
 
@@ -38,6 +59,15 @@ export default function TaskCard({ task }: TaskCardProps) {
             <span>•</span>
             <span>Tests {task.testStatus}</span>
           </div>
+          {task.latestEvent ? (
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-600">
+              <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <div className="min-w-0">
+                <p className="font-medium text-gray-700">{task.latestEvent.label}</p>
+                {task.latestEvent.detail ? <p className="mt-1 line-clamp-2">{task.latestEvent.detail}</p> : null}
+              </div>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
             <span>{getConfidenceLabel(task.score)}</span>
             {isScored ? (
