@@ -19,6 +19,7 @@ const TASK_COLUMN_DEFINITIONS: Record<string, string> = {
 };
 
 const PROJECT_COLUMN_DEFINITIONS: Record<string, string> = {
+  repo_path: "TEXT NOT NULL DEFAULT '.'",
   source_type: "TEXT NOT NULL DEFAULT 'manual'",
   repo_url: "TEXT",
   github_owner: "TEXT",
@@ -27,6 +28,36 @@ const PROJECT_COLUMN_DEFINITIONS: Record<string, string> = {
   github_default_branch: "TEXT",
   github_is_private: "INTEGER NOT NULL DEFAULT 0",
 };
+
+function extractLegacyProjectRepoPath(value: unknown) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+
+      const repoPath = (entry as Record<string, unknown>).repoPath;
+
+      if (typeof repoPath === "string" && repoPath.trim().length > 0) {
+        return repoPath.trim();
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
 
 function getDatabasePath() {
   const dataDir = path.join(process.cwd(), "data");
@@ -124,10 +155,39 @@ function initialize(db: DatabaseSync) {
       }>
     ).map((column) => column.name)
   );
+  const hasLegacyRepositoriesJson = existingProjectColumns.has("repositories_json");
 
   for (const [columnName, definition] of Object.entries(PROJECT_COLUMN_DEFINITIONS)) {
     if (!existingProjectColumns.has(columnName)) {
       db.exec(`ALTER TABLE projects ADD COLUMN ${columnName} ${definition};`);
+    }
+  }
+
+  if (hasLegacyRepositoriesJson) {
+    const updateProjectRepoPath = db.prepare(
+      "UPDATE projects SET repo_path = :repo_path WHERE id = :id"
+    );
+    const legacyRows = db.prepare("SELECT id, repo_path, repositories_json FROM projects").all() as Array<{
+      id: string;
+      repo_path: string | null;
+      repositories_json: string | null;
+    }>;
+
+    for (const row of legacyRows) {
+      const currentRepoPath = row.repo_path?.trim();
+
+      if (currentRepoPath && currentRepoPath !== ".") {
+        continue;
+      }
+
+      const legacyRepoPath = extractLegacyProjectRepoPath(row.repositories_json);
+
+      if (legacyRepoPath && legacyRepoPath !== currentRepoPath) {
+        updateProjectRepoPath.run({
+          repo_path: legacyRepoPath,
+          id: row.id,
+        });
+      }
     }
   }
 }

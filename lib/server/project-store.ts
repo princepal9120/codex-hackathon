@@ -64,7 +64,7 @@ function rowToProject(row: ProjectRow): ProjectRecord {
     id: row.id,
     name: row.name,
     slug: row.slug,
-    repoPath: row.repo_path,
+    repoPath: row.repo_path || ".",
     description: row.description,
     sourceType: normalizeSourceType(row.source_type),
     repoUrl: row.repo_url,

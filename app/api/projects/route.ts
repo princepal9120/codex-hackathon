@@ -6,6 +6,7 @@ import { ensureSeedTasks } from "@/lib/server/task-store";
 import type { CreateProjectInput } from "@/lib/task-types";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function normalizeInput(body: unknown): CreateProjectInput {
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
