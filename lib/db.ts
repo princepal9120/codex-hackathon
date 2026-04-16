@@ -18,6 +18,16 @@ const TASK_COLUMN_DEFINITIONS: Record<string, string> = {
   board_position: "REAL NOT NULL DEFAULT 0",
 };
 
+const PROJECT_COLUMN_DEFINITIONS: Record<string, string> = {
+  source_type: "TEXT NOT NULL DEFAULT 'manual'",
+  repo_url: "TEXT",
+  github_owner: "TEXT",
+  github_repo: "TEXT",
+  github_repo_id: "TEXT",
+  github_default_branch: "TEXT",
+  github_is_private: "INTEGER NOT NULL DEFAULT 0",
+};
+
 function getDatabasePath() {
   const dataDir = path.join(process.cwd(), "data");
   fs.mkdirSync(dataDir, { recursive: true });
@@ -34,6 +44,25 @@ function initialize(db: DatabaseSync) {
       slug TEXT NOT NULL UNIQUE,
       repo_path TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
+      source_type TEXT NOT NULL DEFAULT 'manual',
+      repo_url TEXT,
+      github_owner TEXT,
+      github_repo TEXT,
+      github_repo_id TEXT,
+      github_default_branch TEXT,
+      github_is_private INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS github_connections (
+      id TEXT PRIMARY KEY,
+      github_user_id TEXT NOT NULL,
+      login TEXT NOT NULL,
+      avatar_url TEXT,
+      access_token TEXT NOT NULL,
+      token_type TEXT NOT NULL DEFAULT 'bearer',
+      scope TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -85,6 +114,20 @@ function initialize(db: DatabaseSync) {
   for (const [columnName, definition] of Object.entries(TASK_COLUMN_DEFINITIONS)) {
     if (!existingColumns.has(columnName)) {
       db.exec(`ALTER TABLE tasks ADD COLUMN ${columnName} ${definition};`);
+    }
+  }
+
+  const existingProjectColumns = new Set(
+    (
+      db.prepare("PRAGMA table_info(projects)").all() as Array<{
+        name: string;
+      }>
+    ).map((column) => column.name)
+  );
+
+  for (const [columnName, definition] of Object.entries(PROJECT_COLUMN_DEFINITIONS)) {
+    if (!existingProjectColumns.has(columnName)) {
+      db.exec(`ALTER TABLE projects ADD COLUMN ${columnName} ${definition};`);
     }
   }
 }

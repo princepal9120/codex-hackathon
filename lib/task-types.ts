@@ -1,6 +1,7 @@
 export type TaskStatus = "queued" | "running" | "passed" | "failed" | "needs_review";
 export type TaskKind = "issue" | "report" | "task";
 export type CheckStatus = "passed" | "failed" | "pending";
+export type ProjectSourceType = "manual" | "github";
 export type TaskEventPhase = "task" | "context" | "execution" | "verification";
 export type TaskEventLevel = "info" | "success" | "warning" | "error";
 export type TaskEventKind =
@@ -46,6 +47,13 @@ export interface ProjectRecord {
   slug: string;
   repoPath: string;
   description: string;
+  sourceType: ProjectSourceType;
+  repoUrl: string | null;
+  githubOwner: string | null;
+  githubRepo: string | null;
+  githubRepoId: string | null;
+  githubDefaultBranch: string | null;
+  isPrivate: boolean;
   createdAt: string;
   updatedAt: string;
   taskCount: number;
@@ -102,6 +110,40 @@ export interface CreateProjectInput {
   name: string;
   repoPath?: string;
   description?: string;
+  sourceType?: ProjectSourceType;
+  repoUrl?: string;
+  githubOwner?: string;
+  githubRepo?: string;
+  githubRepoId?: string;
+  githubDefaultBranch?: string;
+  isPrivate?: boolean;
+}
+
+export interface GitHubConnectionRecord {
+  login: string;
+  avatarUrl: string | null;
+  scopes: string[];
+  connectedAt: string;
+}
+
+export interface GitHubConnectionStatus {
+  configured: boolean;
+  connected: boolean;
+  connection: GitHubConnectionRecord | null;
+}
+
+export interface GitHubRepositoryRecord {
+  id: string;
+  name: string;
+  fullName: string;
+  owner: string;
+  htmlUrl: string;
+  description: string | null;
+  defaultBranch: string;
+  isPrivate: boolean;
+  language: string | null;
+  updatedAt: string;
+  repoPathSuggestion: string;
 }
 
 export interface RunTaskResult {
