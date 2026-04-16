@@ -10,15 +10,11 @@ export default function DiffPanel({ diff, patchSummary }: DiffPanelProps) {
   const lines = content.split("\n");
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg shadow-gray-900/5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">
-        Patch
-      </p>
-      <h3 className="mt-2 text-lg font-bold text-gray-900">Diff preview</h3>
-      <p className="mt-1 text-sm text-gray-500">
-        Review the generated patch before trusting the result.
-      </p>
-      <div className="mt-4 overflow-x-auto rounded-xl border border-gray-200 bg-gray-950 p-4">
+    <section className="rounded-lg border border-border bg-card p-6 shadow-md">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Patch</p>
+      <h3 className="mt-2 text-lg font-bold text-foreground">Diff preview</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Review the generated patch before trusting the result.</p>
+      <div className="mt-4 overflow-x-auto rounded-[var(--radius)] border border-border bg-gray-950 p-4">
         <pre className="text-[12px] leading-6 font-mono">
           {lines.map((line, i) => {
             let className = "text-gray-400";
@@ -31,14 +27,9 @@ export default function DiffPanel({ diff, patchSummary }: DiffPanelProps) {
             } else if (line.startsWith("@@")) {
               className = "text-blue-400";
             } else if (line.startsWith("diff ")) {
-              className = "text-violet-400 font-semibold";
+              className = "text-primary font-semibold";
             }
-
-            return (
-              <span key={i} className={`block ${className}`}>
-                {line || " "}
-              </span>
-            );
+            return <span key={i} className={`block ${className}`}>{line || " "}</span>;
           })}
         </pre>
       </div>
