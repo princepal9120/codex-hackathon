@@ -1,83 +1,85 @@
 import Link from "next/link";
-import { AlertTriangle, Clock3 } from "lucide-react";
+import { CheckCircle2, Clock3, Files, FolderGit2, ShieldAlert, Sparkles } from "lucide-react";
 
 import {
   formatTaskTimestamp,
   getConfidenceLabel,
-  getFailureClassificationLabel,
+  getTaskIdentifier,
   type TaskRecord,
 } from "@/components/task-api";
-import { Badge } from "@/components/ui/Badge";
-import StatusBadge from "@/components/StatusBadge";
 
 interface TaskCardProps {
   task: TaskRecord;
 }
 
+const statusPillStyles: Record<TaskRecord["status"], string> = {
+  queued: "bg-[#f2efe9] text-[#7b7367]",
+  running: "bg-[#f7edd0] text-[#a26b06]",
+  passed: "bg-[#e6f3ea] text-[#277a46]",
+  failed: "bg-[#f8e7e6] text-[#a54646]",
+  needs_review: "bg-[#eee6fb] text-[#7b4fc9]",
+};
+
 export default function TaskCard({ task }: TaskCardProps) {
-  const isScored = task.score !== null && (task.status === "passed" || task.status === "failed" || task.status === "needs_review");
+  const verificationCopy =
+    task.lintStatus === "failed" || task.testStatus === "failed"
+      ? "Verification failed"
+      : task.lintStatus === "passed" && task.testStatus === "passed"
+        ? "Verification passed"
+        : "Verification pending";
+
+  const verificationIcon =
+    task.lintStatus === "failed" || task.testStatus === "failed" ? (
+      <ShieldAlert className="h-3.5 w-3.5" />
+    ) : task.lintStatus === "passed" && task.testStatus === "passed" ? (
+      <CheckCircle2 className="h-3.5 w-3.5" />
+    ) : (
+      <Clock3 className="h-3.5 w-3.5" />
+    );
 
   return (
     <Link href={`/tasks/${task.id}`}>
-      <div className="flex h-full cursor-pointer flex-col justify-between rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:border-gray-300 hover:shadow-md">
-        <div>
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <h3 className="flex-1 text-sm font-semibold leading-tight text-gray-900">{task.title}</h3>
+      <article className="rounded-[18px] border border-[#e7e2d9] bg-white p-4 shadow-[0_8px_20px_rgba(26,22,17,0.05)] transition-all hover:-translate-y-0.5 hover:border-[#d9d2c8] hover:shadow-[0_14px_28px_rgba(26,22,17,0.08)]">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#9a958c]">{getTaskIdentifier(task.id)}</p>
+            <h3 className="mt-2 text-[15px] font-semibold leading-5 text-[#27241f]">{task.title}</h3>
           </div>
-          <p className="mb-4 line-clamp-3 text-xs text-gray-600">{task.prompt}</p>
-          {task.repoPath ? (
-            <p className="mb-4 text-[11px] uppercase tracking-wide text-gray-400">Repo: {task.repoPath}</p>
-          ) : null}
-          {task.statusSummary ? (
-            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Status signal</p>
-              <p className="mt-2 line-clamp-3 text-xs text-gray-700">{task.statusSummary}</p>
-            </div>
-          ) : null}
-          {task.failureSignal ? (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-red-800">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                <p className="text-[11px] font-semibold uppercase tracking-wide">
-                  {getFailureClassificationLabel(task.failureSignal.classification)}
-                </p>
-              </div>
-              <p className="mt-2 line-clamp-2 text-xs">{task.failureSignal.summary}</p>
-            </div>
-          ) : null}
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${statusPillStyles[task.status]}`}>
+            {task.score ?? "—"}
+          </span>
         </div>
 
-        <div className="border-t border-gray-100 pt-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <StatusBadge status={task.status} />
-            <span className="text-xs text-gray-500">{formatTaskTimestamp(task.updatedAt)}</span>
-          </div>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
-            <span>{task.selectedFiles.length} files</span>
-            <span>•</span>
-            <span>Lint {task.lintStatus}</span>
-            <span>•</span>
-            <span>Tests {task.testStatus}</span>
-          </div>
-          {task.latestEvent ? (
-            <div className="mb-3 flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-600">
-              <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
-              <div className="min-w-0">
-                <p className="font-medium text-gray-700">{task.latestEvent.label}</p>
-                {task.latestEvent.detail ? <p className="mt-1 line-clamp-2">{task.latestEvent.detail}</p> : null}
-              </div>
+        <p className="mt-2 line-clamp-2 text-[13px] leading-5 text-[#8b857c]">{task.contextSummary || task.prompt}</p>
+
+        <div className="mt-4 flex items-center gap-2 text-[11px] text-[#7c766d]">
+          <span className="inline-flex items-center gap-1">
+            <FolderGit2 className="h-3.5 w-3.5" />
+            {task.repoPath || "."}
+          </span>
+          <span className="text-[#cac2b8]">•</span>
+          <span className="inline-flex items-center gap-1">
+            <Files className="h-3.5 w-3.5" />
+            {task.selectedFiles.length} files
+          </span>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f5efe4] text-[#8b6d3f]">
+              <Sparkles className="h-3.5 w-3.5" />
             </div>
-          ) : null}
-          <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
-            <span>{getConfidenceLabel(task.score)}</span>
-            {isScored ? (
-              <Badge variant="primary" className="text-xs">
-                {task.score}/100
-              </Badge>
-            ) : null}
+            <div className="min-w-0">
+              <p className="truncate text-[11px] font-medium text-[#4d483f]">{getConfidenceLabel(task.score)}</p>
+              <p className="truncate text-[11px] text-[#908980]">Updated {formatTaskTimestamp(task.updatedAt)}</p>
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-1 rounded-full bg-[#f7f3ec] px-2.5 py-1 text-[10px] font-medium text-[#756d61]">
+            {verificationIcon}
+            {verificationCopy}
           </div>
         </div>
-      </div>
+      </article>
     </Link>
   );
 }

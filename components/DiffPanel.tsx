@@ -1,3 +1,6 @@
+import { Badge } from "@/components/ui/Badge";
+import SurfaceCard from "@/components/SurfaceCard";
+
 interface DiffPanelProps {
   diff: string;
   patchSummary?: string;
@@ -6,26 +9,31 @@ interface DiffPanelProps {
 export default function DiffPanel({ diff, patchSummary }: DiffPanelProps) {
   if (!diff) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 p-6">
-        <p className="text-sm text-gray-500">No diff has been captured yet.</p>
-      </div>
+      <SurfaceCard eyebrow="Primary artifact" title="Patch preview" description="The diff will appear here as soon as CodexFlow captures a reviewable patch preview.">
+        <div className="rounded-[22px] border border-dashed border-[#e6ded3] bg-[#faf6f0] px-5 py-12 text-center text-sm text-[#7b7267]">
+          No diff has been captured yet.
+        </div>
+      </SurfaceCard>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-      <div className="border-b border-gray-200 bg-gray-50 px-6 py-3">
-        <h3 className="text-sm font-semibold text-gray-900">Code Diff</h3>
-      </div>
-      <div className="border-b border-violet-200 bg-violet-50 px-6 py-4 text-sm text-violet-900">
-        <p className="font-medium">Patch preview first</p>
-        <p className="mt-1 text-violet-900/80">
-          {patchSummary || "CodexFlow shows a patch preview for review. It does not auto-apply arbitrary repository changes."}
+    <SurfaceCard
+      eyebrow="Primary artifact"
+      title="Patch preview"
+      description="This diff is the review artifact. CodexFlow does not auto-apply arbitrary repository changes."
+      action={<Badge variant="warning">Preview first</Badge>}
+      bodyClassName="p-0"
+    >
+      <div className="border-b border-[#efe4c9] bg-[#fff8e6] px-6 py-4 text-sm text-[#916a15] sm:px-7">
+        <p className="font-medium text-[#5b4420]">Patch summary</p>
+        <p className="mt-1 leading-6 text-[#8a6a26]">
+          {patchSummary || "CodexFlow shows a patch preview for review before any human trusts the run."}
         </p>
       </div>
-      <pre className="overflow-x-auto bg-gray-50 p-6 text-xs leading-relaxed text-gray-700 font-mono">
+      <pre className="overflow-x-auto bg-[#fbfaf7] px-6 py-6 text-xs leading-7 text-[#4d463d] sm:px-7">
         <code>{diff}</code>
       </pre>
-    </div>
+    </SurfaceCard>
   );
 }

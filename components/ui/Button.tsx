@@ -1,22 +1,19 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium tracking-[-0.02em] transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#57d1c4]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#090b0f] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium tracking-[-0.02em] transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f6f3ee] disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default:
-          "bg-[#57d1c4] text-[#081013] shadow-[0_14px_34px_rgba(87,209,196,0.18)] hover:-translate-y-0.5 hover:bg-[#6bddcf] hover:shadow-[0_20px_48px_rgba(87,209,196,0.22)]",
-        destructive: "bg-[#e56a6a] text-white hover:-translate-y-0.5 hover:bg-[#ef7b7b]",
-        outline:
-          "border border-white/10 bg-[#141922]/72 text-[#eef2f7] hover:border-[#57d1c4]/28 hover:bg-[#181f28]",
-        secondary:
-          "bg-[#151920] text-[#eef2f7] hover:-translate-y-0.5 hover:bg-[#1a2028]",
-        ghost: "text-[#c7ced8] hover:bg-white/[0.06] hover:text-white",
-        link: "text-[#57d1c4] underline-offset-4 hover:underline",
+        default: "bg-[#191713] text-[#fcfaf6] shadow-[0_10px_24px_rgba(25,23,19,0.16)] hover:-translate-y-0.5 hover:bg-[#26231d]",
+        destructive: "bg-[#d56b5e] text-[#fffaf7] hover:-translate-y-0.5 hover:bg-[#c55f53]",
+        outline: "border border-[#e1d9cd] bg-white text-[#1f1c17] hover:border-[#cbc1b3] hover:bg-[#fcfaf6]",
+        secondary: "bg-[#f1ece4] text-[#2b261f] hover:bg-[#ebe4d9]",
+        ghost: "text-[#5e564b] hover:bg-white/80 hover:text-[#1f1c17]",
+        link: "text-[#0f766e] underline-offset-4 hover:underline",
       },
       size: {
         default: "h-11 px-5 py-2",
@@ -30,21 +27,13 @@ const buttonVariants = cva(
       size: "default",
     },
   }
-)
+);
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => (
-    <button
-      className={cn(buttonVariants({ variant, size, className }))}
-      ref={ref}
-      {...props}
-    />
-  )
-)
-Button.displayName = "Button"
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, ...props }, ref) => (
+  <button className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
+));
+Button.displayName = "Button";
 
-export { Button, buttonVariants }
+export { Button, buttonVariants };

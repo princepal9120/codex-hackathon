@@ -5,7 +5,7 @@ import {
   getFailureClassificationLabel,
   type TaskRecord,
   type TaskTimelineEvent,
-  type TaskTimelineEventKind,
+  type TaskTimelineEventPhase,
 } from "@/components/task-api";
 
 interface TaskTimelinePanelProps {
@@ -16,7 +16,7 @@ interface TaskTimelinePanelProps {
 }
 
 const eventStyles: Record<
-  TaskTimelineEventKind,
+  TaskTimelineEventPhase,
   { icon: LucideIcon; tone: string; iconTone: string }
 > = {
   task: {
@@ -39,17 +39,31 @@ const eventStyles: Record<
     tone: "border-green-200 bg-green-50",
     iconTone: "text-green-600",
   },
-  failure: {
-    icon: AlertTriangle,
-    tone: "border-red-200 bg-red-50",
-    iconTone: "text-red-600",
-  },
-  system: {
-    icon: Clock3,
-    tone: "border-gray-200 bg-white",
-    iconTone: "text-gray-400",
-  },
 };
+
+function getEventStyle(event: TaskTimelineEvent) {
+  if (event.level === "error") {
+    return {
+      icon: AlertTriangle,
+      tone: "border-red-200 bg-red-50",
+      iconTone: "text-red-600",
+    };
+  }
+
+  if (event.level === "warning") {
+    return {
+      icon: Clock3,
+      tone: "border-amber-200 bg-amber-50",
+      iconTone: "text-amber-600",
+    };
+  }
+
+  return eventStyles[event.phase];
+}
+
+function formatEventKind(kind: TaskTimelineEvent["kind"]) {
+  return kind.replace(/_/g, " ");
+}
 
 function sortTimeline(events: TaskTimelineEvent[]) {
   return [...events].sort((left, right) => {
@@ -89,18 +103,18 @@ export default function TaskTimelinePanel({
         <div className="border-b border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-900">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-white/80 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
-              {getFailureClassificationLabel(task.failureSignal.classification)}
+              {getFailureClassificationLabel(task.failureSignal.category)}
             </span>
             <p className="font-medium">{task.failureSignal.summary}</p>
           </div>
           {task.failureSignal.detail ? <p className="mt-2 text-amber-900/80">{task.failureSignal.detail}</p> : null}
-          {task.failureSignal.action ? <p className="mt-2 text-xs text-amber-900/80">Next step: {task.failureSignal.action}</p> : null}
+          <p className="mt-2 text-xs text-amber-900/80">Detected {formatTaskTimestamp(task.failureSignal.detectedAt)}</p>
         </div>
       ) : null}
 
       <div className="space-y-3 px-6 py-5">
         {timeline.map((event) => {
-          const style = eventStyles[event.kind];
+          const style = getEventStyle(event);
           const Icon = style.icon;
 
           return (
@@ -109,13 +123,14 @@ export default function TaskTimelinePanel({
                 <Icon className={`h-4 w-4 shrink-0 ${style.iconTone}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-gray-900">{event.label}</p>
-                    {event.status ? (
-                      <span className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600">
-                        {event.status.replace("_", " ")}
-                      </span>
-                    ) : null}
-                    {event.kind === "verification" && task.status === "passed" ? (
+                    <p className="text-sm font-semibold text-gray-900">{event.title}</p>
+                    <span className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+                      {formatEventKind(event.kind)}
+                    </span>
+                    <span className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                      {event.level}
+                    </span>
+                    {event.phase === "verification" && task.status === "passed" ? (
                       <CheckCircle2 className="h-4 w-4 text-green-600" />
                     ) : null}
                   </div>
@@ -125,7 +140,7 @@ export default function TaskTimelinePanel({
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-xs text-gray-500">{formatTaskTimestamp(event.createdAt ?? task.updatedAt)}</p>
-                  {event.source ? <p className="mt-1 text-[11px] uppercase tracking-wide text-gray-400">{event.source}</p> : null}
+                  <p className="mt-1 text-[11px] uppercase tracking-wide text-gray-400">{event.phase}</p>
                 </div>
               </div>
             </div>

@@ -1,3 +1,4 @@
+import SurfaceCard from "@/components/SurfaceCard";
 import { getConfidenceLabel, type TaskRecord } from "@/components/task-api";
 
 interface ScoreCardProps {
@@ -9,32 +10,29 @@ export default function ScoreCard({ task }: ScoreCardProps) {
     return null;
   }
 
-  const getScoreColor = (score: number | null) => {
-    if (score === null) return "text-gray-400";
-    if (score >= 80) return "text-green-600";
-    if (score >= 60) return "text-amber-600";
-    return "text-red-600";
-  };
+  const score = task.score ?? 0;
+  const barWidth = Math.max(6, Math.min(100, score));
+  const tone = score >= 80 ? "bg-[#277a46]" : score >= 60 ? "bg-[#c7932b]" : "bg-[#c96e6e]";
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6">
-      <p className="mb-3 text-sm font-medium text-gray-600">Score</p>
+    <SurfaceCard eyebrow="Score" title="Confidence snapshot" description="A compact signal combining verification and run outcome into one quick read.">
       <div className="flex items-end gap-3">
-        <span className={`text-4xl font-bold ${getScoreColor(task.score)}`}>
-          {task.score ?? "—"}
-        </span>
-        <span className="pb-1 text-gray-600">/100</span>
+        <span className="text-5xl font-semibold tracking-[-0.06em] text-[#1f1c17]">{task.score ?? "—"}</span>
+        <span className="pb-2 text-sm text-[#7f766a]">/100</span>
       </div>
-      <p className="mt-3 text-xs text-gray-500">
+      <div className="mt-4 h-2 rounded-full bg-[#ece5da]">
+        <div className={`h-2 rounded-full ${tone}`} style={{ width: `${barWidth}%` }} />
+      </div>
+      <p className="mt-4 text-sm leading-6 text-[#6f675d]">
         {task.status === "passed"
-          ? "Task completed successfully."
+          ? "Verification cleared and the patch preview looks consistent."
           : task.status === "failed"
-            ? "Task execution failed verification."
+            ? "Execution failed before CodexFlow could produce a trustworthy result."
             : task.status === "needs_review"
-              ? "Task is awaiting human review."
-              : "CodexFlow is still working through the pipeline."}
+              ? "The review artifact exists, but a human still needs to make the trust decision."
+              : "CodexFlow is still moving through the execution pipeline."}
       </p>
-      <p className="mt-2 text-xs font-medium text-gray-600">{getConfidenceLabel(task.score)}</p>
-    </div>
+      <p className="mt-2 text-sm font-medium text-[#1f1c17]">{getConfidenceLabel(task.score)}</p>
+    </SurfaceCard>
   );
 }
