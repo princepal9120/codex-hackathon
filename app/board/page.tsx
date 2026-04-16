@@ -396,11 +396,21 @@ export default function BoardPage() {
                   <div>
                     <h1 className="text-xl font-bold tracking-tight text-white">Task Board</h1>
                     <p className="mt-1 text-sm text-white/40">
-                      {sortedTasks.length} {sortedTasks.length === 1 ? "task" : "tasks"} · Kanban view
+                      {sortedTasks.length} {sortedTasks.length === 1 ? "task" : "tasks"} · Kanban view · live sync every {TASK_REFRESH_INTERVAL_MS / 1000}s
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
                     <ViewToggle mode={viewMode} onChange={setViewMode} />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void loadTasks(true)}
+                      disabled={refreshingList}
+                      className="h-9 gap-2 border-white/[0.1] text-white/70 hover:bg-white/[0.06] hover:text-white"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${refreshingList ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
                     <Button
                       size="sm"
                       onClick={() => setIsCreateModalOpen(true)}
@@ -444,15 +454,27 @@ export default function BoardPage() {
               <section className="flex flex-col border-b border-white/[0.06] lg:border-b-0 lg:border-r lg:border-r-white/[0.06] lg:h-screen lg:overflow-hidden">
                 <div className="border-b border-white/[0.06] px-5 py-4">
                   <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h1 className="text-lg font-bold tracking-tight text-white">Tasks</h1>
-                      <p className="mt-1 text-sm text-white/40">{sortedTasks.length} tasks</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <ViewToggle mode={viewMode} onChange={setViewMode} />
-                      <Button
-                        size="sm"
-                        onClick={() => setIsCreateModalOpen(true)}
+                  <div>
+                    <h1 className="text-lg font-bold tracking-tight text-white">Tasks</h1>
+                    <p className="mt-1 text-sm text-white/40">
+                      {sortedTasks.length} tasks · live sync every {TASK_REFRESH_INTERVAL_MS / 1000}s
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ViewToggle mode={viewMode} onChange={setViewMode} />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void loadTasks(true)}
+                      disabled={refreshingList}
+                      className="h-8 gap-1.5 border-white/[0.1] text-white/70 hover:bg-white/[0.06] hover:text-white"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${refreshingList ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setIsCreateModalOpen(true)}
                         className="h-8 gap-1.5 bg-violet-600 text-white hover:bg-violet-700"
                       >
                         <Plus className="h-3.5 w-3.5" />
