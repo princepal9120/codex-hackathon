@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -16,7 +16,10 @@ import {
   LayoutList,
   Loader2,
   Monitor,
+  Play,
   Plus,
+  RefreshCw,
+  RotateCcw,
   Search,
   Settings,
   Sparkles,
@@ -28,12 +31,17 @@ import {
 
 import CreateTaskModal from "@/components/CreateTaskModal";
 import {
+  fetchTask,
   fetchTasks,
   formatTaskTimestamp,
   getConfidenceLabel,
   getTaskIdentifier,
-  getTaskStatusMeta,
+  isTerminalStatus,
+  retryTask,
+  runTask,
+  TASK_REFRESH_INTERVAL_MS,
   type TaskRecord,
+  type TaskSource,
   type TaskStatus,
 } from "@/components/task-api";
 import { Button } from "@/components/ui/Button";
@@ -72,24 +80,69 @@ const configureNav = [
 export default function BoardPage() {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskDetail, setSelectedTaskDetail] = useState<TaskRecord | null>(null);
+  const [detailSource, setDetailSource] = useState<TaskSource>("api");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshingList, setRefreshingList] = useState(false);
+  const [refreshingDetail, setRefreshingDetail] = useState(false);
+  const [runningTask, setRunningTask] = useState(false);
+  const [retryingTask, setRetryingTask] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [detailMessage, setDetailMessage] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+
+  const upsertTask = useCallback((nextTask: TaskRecord) => {
+    setTasks((current) => {
+      const index = current.findIndex((task) => task.id === nextTask.id);
+      if (index === -1) {
+        return [nextTask, ...current];
+      }
+
+      const copy = [...current];
+      copy[index] = nextTask;
+      return copy;
+    });
+  }, []);
+
+  const loadTasks = useCallback(async (background = false) => {
+    if (background) {
+      setRefreshingList(true);
+    }
+
+    const result = await fetchTasks();
+    setTasks(result.tasks);
+    setMessage(result.message ?? null);
+    setLoading(false);
+    setRefreshingList(false);
+  }, []);
 
   useEffect(() => {
     let active = true;
 
-    const load = async () => {
+    const syncTasks = async (background = false) => {
+      if (background && active) {
+        setRefreshingList(true);
+      }
+
       const result = await fetchTasks();
       if (!active) return;
+
       setTasks(result.tasks);
       setMessage(result.message ?? null);
       setLoading(false);
+      setRefreshingList(false);
     };
 
-    void load();
-    return () => { active = false; };
+    void syncTasks(false);
+    const interval = window.setInterval(() => {
+      void syncTasks(true);
+    }, TASK_REFRESH_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, []);
 
   const sortedTasks = useMemo(() => {
@@ -118,16 +171,139 @@ export default function BoardPage() {
     return map;
   }, [sortedTasks]);
 
-  const selectedTask = useMemo(
+  const selectedTaskSummary = useMemo(
     () => sortedTasks.find((t) => t.id === selectedTaskId) ?? null,
     [selectedTaskId, sortedTasks]
   );
+
+  const selectedTask = useMemo(() => {
+    if (selectedTaskDetail && selectedTaskDetail.id === selectedTaskId) {
+      return selectedTaskDetail;
+    }
+
+    return selectedTaskSummary;
+  }, [selectedTaskDetail, selectedTaskId, selectedTaskSummary]);
 
   useEffect(() => {
     if (!selectedTaskId && sortedTasks.length > 0) {
       setSelectedTaskId(sortedTasks[0].id);
     }
   }, [selectedTaskId, sortedTasks]);
+
+  useEffect(() => {
+    if (selectedTaskSummary && (!selectedTaskDetail || selectedTaskDetail.id !== selectedTaskSummary.id)) {
+      setSelectedTaskDetail(selectedTaskSummary);
+    }
+  }, [selectedTaskDetail, selectedTaskSummary]);
+
+  const loadSelectedTask = useCallback(
+    async (background = false) => {
+      if (!selectedTaskId) {
+        setSelectedTaskDetail(null);
+        setDetailMessage(null);
+        return;
+      }
+
+      if (background) {
+        setRefreshingDetail(true);
+      }
+
+      try {
+        const result = await fetchTask(selectedTaskId);
+        if (result.task) {
+          setSelectedTaskDetail(result.task);
+          upsertTask(result.task);
+        } else {
+          setSelectedTaskDetail(null);
+        }
+        setDetailSource(result.source);
+        setDetailMessage(result.message ?? null);
+      } finally {
+        setRefreshingDetail(false);
+      }
+    },
+    [selectedTaskId, upsertTask]
+  );
+
+  useEffect(() => {
+    void loadSelectedTask(false);
+  }, [loadSelectedTask]);
+
+  useEffect(() => {
+    if (!selectedTask || isTerminalStatus(selectedTask.status)) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void loadSelectedTask(true);
+    }, TASK_REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [loadSelectedTask, selectedTask]);
+
+  const handleRunSelectedTask = useCallback(async () => {
+    if (!selectedTask || selectedTask.status !== "queued" || runningTask) {
+      return;
+    }
+
+    setRunningTask(true);
+
+    try {
+      const nextTask = await runTask(selectedTask.id);
+      setSelectedTaskDetail(nextTask);
+      upsertTask(nextTask);
+      setDetailMessage(null);
+    } catch (error) {
+      setDetailMessage(error instanceof Error ? error.message : "Unable to start the task.");
+    } finally {
+      setRunningTask(false);
+    }
+  }, [runningTask, selectedTask, upsertTask]);
+
+  const handleRetrySelectedTask = useCallback(async () => {
+    if (!selectedTask || !isTerminalStatus(selectedTask.status) || retryingTask) {
+      return;
+    }
+
+    setRetryingTask(true);
+
+    try {
+      const nextTask = await retryTask(selectedTask.id);
+      setSelectedTaskDetail(nextTask);
+      upsertTask(nextTask);
+      setDetailMessage(null);
+    } catch (error) {
+      setDetailMessage(error instanceof Error ? error.message : "Unable to retry the task.");
+    } finally {
+      setRetryingTask(false);
+    }
+  }, [retryingTask, selectedTask, upsertTask]);
+
+  const selectedTaskAction = useMemo(() => {
+    if (!selectedTask) {
+      return null;
+    }
+
+    if (selectedTask.status === "queued") {
+      return {
+        label: runningTask ? "Starting…" : "Start task",
+        icon: Play,
+        onClick: handleRunSelectedTask,
+        disabled: runningTask,
+      };
+    }
+
+    if (isTerminalStatus(selectedTask.status)) {
+      return {
+        label: retryingTask ? "Retrying…" : "Retry task",
+        icon: RotateCcw,
+        onClick: handleRetrySelectedTask,
+        disabled: retryingTask,
+      };
+    }
+
+    return null;
+  }, [handleRetrySelectedTask, handleRunSelectedTask, retryingTask, runningTask, selectedTask]);
 
   return (
     <>
