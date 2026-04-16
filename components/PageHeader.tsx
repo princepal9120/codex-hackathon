@@ -1,48 +1,62 @@
-import { type ReactNode } from "react";
+'use client';
 
-import { Badge } from "@/components/ui/Badge";
-import { cn } from "@/lib/utils";
-
-interface HeaderMetaItem {
-  label: string;
-  value: ReactNode;
-}
+import type { ReactNode } from "react";
 
 interface PageHeaderProps {
   eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
   badge?: string;
-  meta?: HeaderMetaItem[];
   actions?: ReactNode;
-  className?: string;
+  meta?: Array<{ label: string; value: ReactNode }>;
 }
 
-export default function PageHeader({ eyebrow, title, description, badge, meta, actions, className }: PageHeaderProps) {
+export default function PageHeader({
+  eyebrow,
+  title,
+  description,
+  badge,
+  actions,
+  meta,
+}: PageHeaderProps) {
   return (
-    <section className={cn("product-frame rounded-[34px] px-6 py-7 sm:px-8 sm:py-8", className)}>
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-        <div className="max-w-4xl">
-          <div className="flex flex-wrap items-center gap-3">
-            {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8b8378]">{eyebrow}</p> : null}
-            {badge ? <Badge variant="secondary">{badge}</Badge> : null}
+    <header className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg shadow-gray-900/5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl">
+          <div className="flex items-center gap-3">
+            {eyebrow && (
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">
+                {eyebrow}
+              </p>
+            )}
+            {badge && (
+              <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-[10px] font-semibold text-violet-600">
+                {badge}
+              </span>
+            )}
           </div>
-          <h1 className="mt-4 text-4xl font-semibold tracking-[-0.06em] text-[#1f1c17] sm:text-5xl">{title}</h1>
-          <p className="mt-4 max-w-3xl text-base leading-7 text-[#6f675d] sm:text-lg">{description}</p>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+            {title}
+          </h1>
+          {description && (
+            <p className="mt-3 text-sm leading-7 text-gray-600">{description}</p>
+          )}
         </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div> : null}
+        {actions && <div className="flex items-center gap-3">{actions}</div>}
       </div>
 
-      {meta && meta.length > 0 ? (
-        <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {meta.map((item) => (
-            <div key={item.label} className="surface-quiet rounded-[22px] px-4 py-4">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#8d8478]">{item.label}</p>
-              <div className="mt-2 text-sm font-medium text-[#2a261f]">{item.value}</div>
+      {meta && meta.length > 0 && (
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {meta.map(({ label, value }) => (
+            <div key={label} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                {label}
+              </p>
+              <div className="mt-1 text-sm font-semibold text-gray-900">{value}</div>
             </div>
           ))}
         </div>
-      ) : null}
-    </section>
+      )}
+    </header>
   );
 }

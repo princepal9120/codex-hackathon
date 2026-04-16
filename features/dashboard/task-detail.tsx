@@ -76,9 +76,7 @@ export default function TaskDetail({ id }: TaskDetailProps) {
   }, [loadTask, task]);
 
   const handleRetry = useCallback(async () => {
-    if (!task || retrying) {
-      return;
-    }
+    if (!task || retrying) return;
 
     setRetrying(true);
 
@@ -94,9 +92,7 @@ export default function TaskDetail({ id }: TaskDetailProps) {
   }, [retrying, task]);
 
   const summaryMeta = useMemo(() => {
-    if (!task) {
-      return [];
-    }
+    if (!task) return [];
 
     return [
       { label: "Status", value: <StatusPill status={task.status} /> },
@@ -109,8 +105,11 @@ export default function TaskDetail({ id }: TaskDetailProps) {
   if (loading && !task) {
     return (
       <main className="mx-auto max-w-7xl px-6 py-8 pb-16">
-        <div className="rounded-[28px] border border-[#e8e0d4] bg-white px-6 py-16 text-center text-sm text-[#7b7267] shadow-[0_10px_24px_rgba(31,24,18,0.05)]">
-          Loading task detail…
+        <div className="flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-6 py-20 shadow-lg shadow-gray-900/5">
+          <div className="text-center">
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-violet-200 border-t-violet-600" />
+            <p className="mt-4 text-sm text-gray-500">Loading task detail…</p>
+          </div>
         </div>
       </main>
     );
@@ -120,16 +119,16 @@ export default function TaskDetail({ id }: TaskDetailProps) {
     return (
       <main className="mx-auto max-w-4xl px-6 py-8 pb-16">
         <Link href="/board">
-          <Button variant="ghost" className="gap-2">
+          <Button variant="ghost" className="gap-2 text-gray-600 hover:text-gray-900">
             <ArrowLeft className="h-4 w-4" />
             Back to board
           </Button>
         </Link>
 
-        <div className="mt-6 rounded-[28px] border border-[#e8e0d4] bg-white px-6 py-12 shadow-[0_10px_24px_rgba(31,24,18,0.05)]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c8377]">Missing task</p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-[#1f1c17]">Task not found</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-[#6f675d]">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white px-6 py-12 shadow-lg shadow-gray-900/5 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">Missing task</p>
+          <h1 className="mt-4 text-3xl font-bold tracking-tight text-gray-900">Task not found</h1>
+          <p className="mt-4 max-w-md mx-auto text-sm leading-7 text-gray-600">
             {message || "CodexFlow could not find a task for this identifier."}
           </p>
         </div>
@@ -141,12 +140,17 @@ export default function TaskDetail({ id }: TaskDetailProps) {
     <main className="mx-auto max-w-7xl px-6 py-8 pb-16">
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Link href="/board">
-          <Button variant="ghost" className="gap-2">
+          <Button variant="ghost" className="gap-2 text-gray-600 hover:text-gray-900">
             <ArrowLeft className="h-4 w-4" />
             Back to board
           </Button>
         </Link>
-        <Button variant="outline" className="gap-2" onClick={() => void loadTask(true)} disabled={refreshing}>
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={() => void loadTask(true)}
+          disabled={refreshing}
+        >
           <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
           {refreshing ? "Refreshing…" : "Refresh task"}
         </Button>
@@ -159,7 +163,11 @@ export default function TaskDetail({ id }: TaskDetailProps) {
         badge={source === "api" ? "Live task" : "API unavailable"}
         meta={summaryMeta}
         actions={
-          <Button className="gap-2" onClick={handleRetry} disabled={retrying}>
+          <Button
+            className="gap-2 bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20"
+            onClick={handleRetry}
+            disabled={retrying}
+          >
             <RotateCcw className={`h-4 w-4 ${retrying ? "animate-spin" : ""}`} />
             {retrying ? "Retrying…" : "Retry task"}
           </Button>
@@ -167,7 +175,7 @@ export default function TaskDetail({ id }: TaskDetailProps) {
       />
 
       {message ? (
-        <div className="mt-6 rounded-[22px] border border-[#ead7b9] bg-[#fff6e8] px-4 py-3 text-sm text-[#9a6a22]">{message}</div>
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{message}</div>
       ) : null}
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[0.86fr_1.14fr]">
@@ -175,14 +183,14 @@ export default function TaskDetail({ id }: TaskDetailProps) {
           <SurfaceCard
             eyebrow="Run summary"
             title="Execution overview"
-            description="Keep the operator-facing facts visible before diving into the patch preview and raw outputs."
+            description="Operator-facing facts before diving into the patch preview and raw outputs."
             tone="soft"
           >
             <div className="grid gap-3 md:grid-cols-2">
               <SummaryTile label="Status" value={<StatusPill status={task.status} />} />
               <SummaryTile label="Execution mode" value={task.executionMode || "Pending"} />
-              <SummaryTile label="Lint command" value={task.lintCommand || "Configured server default"} />
-              <SummaryTile label="Test command" value={task.testCommand || "Configured server default"} />
+              <SummaryTile label="Lint command" value={task.lintCommand || "Server default"} />
+              <SummaryTile label="Test command" value={task.testCommand || "Server default"} />
               <SummaryTile label="Run started" value={task.runStartedAt ? formatTaskTimestamp(task.runStartedAt) : "Not started yet"} />
               <SummaryTile label="Run finished" value={task.runFinishedAt ? formatTaskTimestamp(task.runFinishedAt) : "Still running"} />
             </div>
@@ -207,9 +215,9 @@ export default function TaskDetail({ id }: TaskDetailProps) {
 
 function SummaryTile({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-[20px] border border-[#e8e0d4] bg-white px-4 py-4 shadow-[0_8px_18px_rgba(31,24,18,0.04)]">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#8b8378]">{label}</p>
-      <div className="mt-2 text-sm leading-6 text-[#1f1c17]">{value}</div>
+    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">{label}</p>
+      <div className="mt-1.5 text-sm font-medium text-gray-900">{value}</div>
     </div>
   );
 }

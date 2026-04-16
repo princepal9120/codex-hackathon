@@ -1,67 +1,76 @@
-import { CheckCircle2, Clock, XCircle } from "lucide-react";
+'use client';
 
-import SurfaceCard from "@/components/SurfaceCard";
-import { getVerificationMeta, type TaskRecord, type VerificationStatus } from "@/components/task-api";
-import { Badge } from "@/components/ui/Badge";
+import { CheckCircle2, XCircle, CircleDashed } from "lucide-react";
+import type { TaskRecord } from "@/components/task-api";
 
 interface VerificationPanelProps {
   task: TaskRecord;
 }
 
-const getStatusIcon = (status: VerificationStatus) => {
-  switch (status) {
-    case "passed":
-      return <CheckCircle2 className="h-5 w-5 text-[#277a46]" />;
-    case "failed":
-      return <XCircle className="h-5 w-5 text-[#b65858]" />;
-    case "pending":
-      return <Clock className="h-5 w-5 text-[#8a8176]" />;
-  }
-};
-
 export default function VerificationPanel({ task }: VerificationPanelProps) {
   return (
-    <SurfaceCard
-      eyebrow="Trust signals"
-      title="Verification evidence"
-      description="Lint, tests, notes, and raw outputs that justify whether the patch preview should be trusted."
-    >
-      <div className="grid gap-3 md:grid-cols-2">
-        <VerificationRow label="Lint" status={task.lintStatus} />
-        <VerificationRow label="Tests" status={task.testStatus} />
+    <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg shadow-gray-900/5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">
+        Verification
+      </p>
+      <h3 className="mt-2 text-lg font-bold text-gray-900">Trust evidence</h3>
+      <p className="mt-1 text-sm text-gray-500">
+        Lint, test, and verification results for this run.
+      </p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <CheckRow label="Lint" status={task.lintStatus} />
+        <CheckRow label="Tests" status={task.testStatus} />
       </div>
 
-      {task.verificationNotes ? (
-        <div className="mt-4 rounded-[22px] border border-[#d5ead8] bg-[#eef8f0] px-4 py-4 text-sm leading-6 text-[#2f7246]">{task.verificationNotes}</div>
-      ) : null}
-      {task.lintOutput ? <OutputBlock label="Lint output" value={task.lintOutput} /> : null}
-      {task.testOutput ? <OutputBlock label="Test output" value={task.testOutput} /> : null}
-      {task.logs ? <OutputBlock label="Execution logs" value={task.logs} /> : null}
-    </SurfaceCard>
+      {task.verificationNotes && (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Notes</p>
+          <p className="mt-1 text-sm leading-6 text-gray-600">{task.verificationNotes}</p>
+        </div>
+      )}
+
+      {(task.lintOutput || task.testOutput) && (
+        <div className="mt-4 space-y-3">
+          {task.lintOutput && (
+            <LogBlock title="Lint output" body={task.lintOutput} />
+          )}
+          {task.testOutput && (
+            <LogBlock title="Test output" body={task.testOutput} />
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
-function VerificationRow({ label, status }: { label: string; status: VerificationStatus }) {
-  const meta = getVerificationMeta(status);
+function CheckRow({ label, status }: { label: string; status: string }) {
+  const Icon = status === "passed" ? CheckCircle2 : status === "failed" ? XCircle : CircleDashed;
+  const colors = {
+    passed: "text-green-600 bg-green-50 border-green-200",
+    failed: "text-red-600 bg-red-50 border-red-200",
+    pending: "text-gray-400 bg-gray-50 border-gray-200",
+  };
+  const style = colors[status as keyof typeof colors] ?? colors.pending;
 
   return (
-    <div className="rounded-[22px] border border-[#e8e0d4] bg-[#faf6f0] px-4 py-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {getStatusIcon(status)}
-          <span className="text-sm font-medium text-[#1f1c17]">{label}</span>
-        </div>
-        <Badge variant={meta.variant}>{meta.label}</Badge>
-      </div>
+    <div className={`flex items-center justify-between rounded-xl border px-4 py-3 ${style}`}>
+      <span className="text-sm font-semibold">{label}</span>
+      <span className="flex items-center gap-1.5 text-sm font-semibold">
+        <Icon className="h-4 w-4" />
+        {status === "passed" ? "Passed" : status === "failed" ? "Failed" : "Pending"}
+      </span>
     </div>
   );
 }
 
-function OutputBlock({ label, value }: { label: string; value: string }) {
+function LogBlock({ title, body }: { title: string; body: string }) {
   return (
-    <div className="mt-4 rounded-[22px] border border-[#e8e0d4] bg-[#fbfaf7] p-4">
-      <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#8c8377]">{label}</p>
-      <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs leading-7 text-[#4f473d]">{value}</pre>
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{title}</p>
+      <pre className="mt-2 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-gray-600">
+        {body.trim() || "No output"}
+      </pre>
     </div>
   );
 }

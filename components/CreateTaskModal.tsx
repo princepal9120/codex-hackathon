@@ -2,7 +2,7 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, FolderTree, Search, ShieldCheck } from "lucide-react";
+import { CheckCircle2, FileSearch, Search, ShieldCheck } from "lucide-react";
 
 import {
   Dialog,
@@ -52,14 +52,11 @@ export default function CreateTaskModal({ open, onOpenChange }: CreateTaskModalP
     if (!nextOpen && !isSubmitting) {
       reset();
     }
-
     onOpenChange(nextOpen);
   };
 
   const handleCreate = async () => {
-    if (!isValid || isSubmitting) {
-      return;
-    }
+    if (!isValid || isSubmitting) return;
 
     setIsSubmitting(true);
     setError(null);
@@ -91,18 +88,18 @@ export default function CreateTaskModal({ open, onOpenChange }: CreateTaskModalP
         <DialogHeader>
           <DialogTitle>Create a repo-aware task</DialogTitle>
           <DialogDescription>
-            Capture the request, set the repo scope, and send CodexFlow through prompt preview and verification.
+            Define the task, set the repo scope, and let CodexFlow handle context selection and verification.
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 overflow-y-auto pr-1">
           <div className="grid gap-6 py-1 lg:grid-cols-[1.35fr_0.8fr]">
             <div className="space-y-5">
-              <section className="surface-soft rounded-[26px] p-5">
+              <section className="rounded-xl border border-gray-200 bg-gray-50 p-5">
                 <div className="mb-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c8377]">Core request</p>
-                  <h3 className="mt-2 text-lg font-semibold text-[#1f1c17]">Describe the job clearly</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#6f675d]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">Core request</p>
+                  <h3 className="mt-2 text-lg font-bold text-gray-900">Describe the job clearly</h3>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
                     Strong prompts make the file ranking, patch preview, and verification trail much more trustworthy.
                   </p>
                 </div>
@@ -118,7 +115,7 @@ export default function CreateTaskModal({ open, onOpenChange }: CreateTaskModalP
                     />
                   </Field>
 
-                  <Field label="Prompt" helper="Describe the expected UI or behavior, constraints, and what good verification should prove.">
+                  <Field label="Prompt" helper="Describe the expected behavior, constraints, and what good verification should prove.">
                     <Textarea
                       id="task-prompt"
                       placeholder="Example: Improve the failed-state experience on the task detail page. Keep the patch preview primary, add a clearer retry CTA, and preserve the existing API contract."
@@ -129,17 +126,17 @@ export default function CreateTaskModal({ open, onOpenChange }: CreateTaskModalP
                 </div>
               </section>
 
-              <section className="surface-soft rounded-[26px] p-5">
+              <section className="rounded-xl border border-gray-200 bg-gray-50 p-5">
                 <div className="mb-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c8377]">Execution settings</p>
-                  <h3 className="mt-2 text-lg font-semibold text-[#1f1c17]">Control repo scope and verification</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#6f675d]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">Execution settings</p>
+                  <h3 className="mt-2 text-lg font-bold text-gray-900">Control repo scope and verification</h3>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
                     These values tell CodexFlow where to scan and which commands should prove the patch preview.
                   </p>
                 </div>
 
                 <div className="grid gap-5">
-                  <Field label="Repository path" helper="Relative path used by the repo scanner and task runner. The server keeps execution inside the configured repository root.">
+                  <Field label="Repository path" helper="Relative path used by the repo scanner and task runner.">
                     <Input
                       id="task-repo-path"
                       type="text"
@@ -150,7 +147,7 @@ export default function CreateTaskModal({ open, onOpenChange }: CreateTaskModalP
                   </Field>
 
                   <div className="grid gap-5 md:grid-cols-2">
-                    <Field label="Lint command" helper="Server-safe command from codexflow.config.json. Arbitrary commands are not accepted.">
+                    <Field label="Lint command" helper="From codexflow.config.json.">
                       <Input
                         id="task-lint-command"
                         type="text"
@@ -159,7 +156,7 @@ export default function CreateTaskModal({ open, onOpenChange }: CreateTaskModalP
                         readOnly
                       />
                     </Field>
-                    <Field label="Test command" helper="Server-safe command from codexflow.config.json. Arbitrary commands are not accepted.">
+                    <Field label="Test command" helper="From codexflow.config.json.">
                       <Input
                         id="task-test-command"
                         type="text"
@@ -174,28 +171,28 @@ export default function CreateTaskModal({ open, onOpenChange }: CreateTaskModalP
             </div>
 
             <div className="space-y-5">
-              <section className="surface-panel rounded-[26px] p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c8377]">Run summary</p>
-                <div className="mt-5 grid gap-3">
+              <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">Run summary</p>
+                <div className="mt-4 grid gap-3">
                   <SummaryStat label="Prompt words" value={String(promptWords)} />
                   <SummaryStat label="Repo target" value={form.repoPath.trim() || "."} mono />
                   <SummaryStat label="Verification" value={form.lintCommand.trim() && form.testCommand.trim() ? "Lint + tests" : "Partial"} />
                 </div>
               </section>
 
-              <section className="surface-soft rounded-[26px] p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c8377]">Pipeline</p>
-                <div className="mt-5 space-y-3">
-                  <PipelineRow icon={<FolderTree className="h-4 w-4 text-[#0f766e]" />} title="Rank relevant files" helper="Scan the repository and assemble the smallest useful context bundle." />
-                  <PipelineRow icon={<Search className="h-4 w-4 text-[#0f766e]" />} title="Build prompt preview" helper="Capture the exact prompt and rationale before the run is trusted." />
-                  <PipelineRow icon={<ShieldCheck className="h-4 w-4 text-[#0f766e]" />} title="Verify before trust" helper="Record lint, tests, logs, and a score for the review flow." />
+              <section className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">Pipeline</p>
+                <div className="mt-4 space-y-2">
+                  <PipelineRow icon={<FileSearch className="h-4 w-4 text-violet-600" />} title="Rank relevant files" helper="Scan the repository and assemble the context bundle." />
+                  <PipelineRow icon={<Search className="h-4 w-4 text-violet-600" />} title="Build prompt preview" helper="Capture the exact prompt and rationale before the run." />
+                  <PipelineRow icon={<ShieldCheck className="h-4 w-4 text-violet-600" />} title="Verify before trust" helper="Record lint, tests, logs, and a score for the review flow." />
                 </div>
               </section>
 
               {error ? (
-                <div className="rounded-[22px] border border-[#ebd2cf] bg-[#fbefee] px-4 py-3 text-sm text-[#9b4740]">{error}</div>
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
               ) : (
-                <div className="rounded-[22px] border border-[#cfe7e4] bg-[#edf8f6] px-4 py-3 text-sm text-[#276c66]">
+                <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-700">
                   Every new task starts with a patch preview. Repository changes stay review artifacts first.
                 </div>
               )}
@@ -207,7 +204,11 @@ export default function CreateTaskModal({ open, onOpenChange }: CreateTaskModalP
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={!isValid || isSubmitting} className="gap-2">
+          <Button
+            onClick={handleCreate}
+            disabled={!isValid || isSubmitting}
+            className="gap-2 bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20"
+          >
             <CheckCircle2 className="h-4 w-4" />
             {isSubmitting ? "Creating…" : "Create Task"}
           </Button>
@@ -221,8 +222,8 @@ function Field({ label, helper, children }: { label: string; helper: string; chi
   return (
     <label className="grid gap-2">
       <div>
-        <p className="text-sm font-medium text-[#1f1c17]">{label}</p>
-        <p className="mt-1 text-xs leading-5 text-[#7e7569]">{helper}</p>
+        <p className="text-sm font-medium text-gray-900">{label}</p>
+        <p className="mt-0.5 text-xs leading-5 text-gray-500">{helper}</p>
       </div>
       {children}
     </label>
@@ -231,21 +232,21 @@ function Field({ label, helper, children }: { label: string; helper: string; chi
 
 function SummaryStat({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="surface-quiet rounded-[20px] px-4 py-4">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#8c8377]">{label}</p>
-      <p className={`mt-2 text-sm font-medium text-[#1f1c17] ${mono ? "font-mono" : ""}`}>{value}</p>
+    <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">{label}</p>
+      <p className={`mt-1 text-sm font-medium text-gray-900 ${mono ? "font-mono" : ""}`}>{value}</p>
     </div>
   );
 }
 
 function PipelineRow({ icon, title, helper }: { icon: ReactNode; title: string; helper: string }) {
   return (
-    <div className="rounded-[20px] border border-[#e8e0d4] bg-[rgba(255,255,255,0.82)] px-4 py-4">
+    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-[#edf8f6]">{icon}</div>
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50">{icon}</div>
         <div>
-          <p className="text-sm font-medium text-[#1f1c17]">{title}</p>
-          <p className="mt-1 text-xs leading-5 text-[#7e7569]">{helper}</p>
+          <p className="text-sm font-medium text-gray-900">{title}</p>
+          <p className="mt-0.5 text-xs text-gray-500">{helper}</p>
         </div>
       </div>
     </div>

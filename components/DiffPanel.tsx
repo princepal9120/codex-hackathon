@@ -1,5 +1,4 @@
-import { Badge } from "@/components/ui/Badge";
-import SurfaceCard from "@/components/SurfaceCard";
+'use client';
 
 interface DiffPanelProps {
   diff: string;
@@ -7,33 +6,42 @@ interface DiffPanelProps {
 }
 
 export default function DiffPanel({ diff, patchSummary }: DiffPanelProps) {
-  if (!diff) {
-    return (
-      <SurfaceCard eyebrow="Primary artifact" title="Patch preview" description="The diff will appear here as soon as CodexFlow captures a reviewable patch preview.">
-        <div className="rounded-[22px] border border-dashed border-[#e6ded3] bg-[#faf6f0] px-5 py-12 text-center text-sm text-[#7b7267]">
-          No diff has been captured yet.
-        </div>
-      </SurfaceCard>
-    );
-  }
+  const content = diff?.trim() || patchSummary || "Patch preview will appear here once the task generates a diff artifact.";
+  const lines = content.split("\n");
 
   return (
-    <SurfaceCard
-      eyebrow="Primary artifact"
-      title="Patch preview"
-      description="This diff is the review artifact. CodexFlow does not auto-apply arbitrary repository changes."
-      action={<Badge variant="warning">Preview first</Badge>}
-      bodyClassName="p-0"
-    >
-      <div className="border-b border-[#efe4c9] bg-[#fff8e6] px-6 py-4 text-sm text-[#916a15] sm:px-7">
-        <p className="font-medium text-[#5b4420]">Patch summary</p>
-        <p className="mt-1 leading-6 text-[#8a6a26]">
-          {patchSummary || "CodexFlow shows a patch preview for review before any human trusts the run."}
-        </p>
+    <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg shadow-gray-900/5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">
+        Patch
+      </p>
+      <h3 className="mt-2 text-lg font-bold text-gray-900">Diff preview</h3>
+      <p className="mt-1 text-sm text-gray-500">
+        Review the generated patch before trusting the result.
+      </p>
+      <div className="mt-4 overflow-x-auto rounded-xl border border-gray-200 bg-gray-950 p-4">
+        <pre className="text-[12px] leading-6 font-mono">
+          {lines.map((line, i) => {
+            let className = "text-gray-400";
+            if (line.startsWith("+++") || line.startsWith("---")) {
+              className = "text-gray-500 font-semibold";
+            } else if (line.startsWith("+")) {
+              className = "text-green-400 bg-green-500/10 px-2 -mx-2 rounded";
+            } else if (line.startsWith("-")) {
+              className = "text-red-400 bg-red-500/10 px-2 -mx-2 rounded";
+            } else if (line.startsWith("@@")) {
+              className = "text-blue-400";
+            } else if (line.startsWith("diff ")) {
+              className = "text-violet-400 font-semibold";
+            }
+
+            return (
+              <span key={i} className={`block ${className}`}>
+                {line || " "}
+              </span>
+            );
+          })}
+        </pre>
       </div>
-      <pre className="overflow-x-auto bg-[#fbfaf7] px-6 py-6 text-xs leading-7 text-[#4d463d] sm:px-7">
-        <code>{diff}</code>
-      </pre>
-    </SurfaceCard>
+    </section>
   );
 }

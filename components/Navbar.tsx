@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Zap } from "lucide-react";
 import { useState } from "react";
 
 import CreateTaskModal from "@/components/CreateTaskModal";
@@ -24,20 +24,20 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="sticky top-0 z-40 border-b border-[#e8e0d4] bg-[rgba(249,246,241,0.82)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
+      <nav className="sticky top-0 z-40 border-b border-gray-200/80 bg-white/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
           <div className="flex min-w-0 items-center gap-6">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#191713] text-sm font-semibold tracking-[0.16em] text-[#fcfaf6]">
-                CF
+            <Link href="/" className="flex items-center gap-3 group">
+              <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-violet-700 text-sm font-bold text-white shadow-lg shadow-violet-500/25 transition-shadow group-hover:shadow-violet-500/40">
+                <Zap className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-[#1f1c17]">CodexFlow</p>
-                <p className="text-xs text-[#7b7368]">Review-first AI execution</p>
+                <p className="text-sm font-semibold text-gray-900">CodexFlow</p>
+                <p className="text-[11px] text-gray-500">AI execution pipeline</p>
               </div>
             </Link>
 
-            <div className="hidden items-center gap-2 md:flex">
+            <div className="hidden items-center gap-1 md:flex">
               {links.map((link) => {
                 const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
                 return (
@@ -45,8 +45,10 @@ export default function Navbar() {
                     key={link.href}
                     href={link.href}
                     className={cn(
-                      "rounded-full px-3 py-2 text-sm transition-colors",
-                      isActive ? "bg-white text-[#1f1c17] shadow-[0_6px_16px_rgba(31,24,18,0.06)]" : "text-[#72695d] hover:bg-white/70 hover:text-[#1f1c17]"
+                      "rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "bg-violet-50 text-violet-700"
+                        : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                     )}
                   >
                     {link.label}
@@ -56,7 +58,11 @@ export default function Navbar() {
             </div>
           </div>
 
-          <Button size="sm" className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
+          <Button
+            size="sm"
+            className="gap-2 bg-violet-600 text-white shadow-lg shadow-violet-500/25 hover:bg-violet-700 hover:shadow-violet-500/40 transition-all duration-200"
+            onClick={() => setIsCreateModalOpen(true)}
+          >
             <Plus className="h-4 w-4" />
             New Task
           </Button>

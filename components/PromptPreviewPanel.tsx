@@ -1,31 +1,38 @@
-import { Badge } from "@/components/ui/Badge";
-import SurfaceCard from "@/components/SurfaceCard";
-import { type TaskRecord } from "@/components/task-api";
+'use client';
+
+import type { TaskRecord } from "@/components/task-api";
 
 interface PromptPreviewPanelProps {
   task: TaskRecord;
 }
 
 export default function PromptPreviewPanel({ task }: PromptPreviewPanelProps) {
-  if (!task.promptPreview) {
-    return null;
-  }
+  const preview = task.promptPreview || task.prompt;
 
   return (
-    <SurfaceCard
-      eyebrow="Review artifact"
-      title="Prompt & context preview"
-      description="Inspect the exact context bundle and prompt shape used to generate the patch preview."
-      action={<Badge variant="secondary">Context locked</Badge>}
-      bodyClassName="p-0"
-    >
-      <div className="border-b border-[#d9ece7] bg-[#edf8f6] px-6 py-4 text-sm text-[#276c66] sm:px-7">
-        <p className="font-medium text-[#1f1c17]">Why these files were selected</p>
-        <p className="mt-1 leading-6 text-[#4c756f]">{task.contextSummary || "CodexFlow assembled a repo-aware context bundle for this run."}</p>
+    <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg shadow-gray-900/5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">
+        Context
+      </p>
+      <h3 className="mt-2 text-lg font-bold text-gray-900">Prompt preview</h3>
+      <p className="mt-1 text-sm text-gray-500">
+        The exact prompt sent to the model, visible for audit.
+      </p>
+
+      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <pre className="overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-6 text-gray-700">
+          {preview || "Prompt preview will appear after the task generates context."}
+        </pre>
       </div>
-      <pre className="overflow-x-auto whitespace-pre-wrap break-words bg-[#fbfaf7] px-6 py-6 text-xs leading-7 text-[#4f473d] sm:px-7">
-        <code>{task.promptPreview}</code>
-      </pre>
-    </SurfaceCard>
+
+      {task.contextSummary && (
+        <div className="mt-4 rounded-xl border border-violet-100 bg-violet-50/50 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-violet-500">
+            Context summary
+          </p>
+          <p className="mt-1 text-sm leading-6 text-gray-700">{task.contextSummary}</p>
+        </div>
+      )}
+    </section>
   );
 }

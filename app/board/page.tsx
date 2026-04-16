@@ -1,13 +1,20 @@
 'use client';
 
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
+  ArrowRight,
   Bot,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
+  Clock,
+  Command,
+  Eye,
   FolderKanban,
   Inbox,
+  LayoutList,
+  Loader2,
   Monitor,
   Plus,
   Search,
@@ -16,6 +23,7 @@ import {
   Users,
   Workflow,
   XCircle,
+  Zap,
 } from "lucide-react";
 
 import CreateTaskModal from "@/components/CreateTaskModal";
@@ -26,9 +34,20 @@ import {
   getTaskIdentifier,
   getTaskStatusMeta,
   type TaskRecord,
+  type TaskStatus,
 } from "@/components/task-api";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+
+type ViewMode = "kanban" | "list";
+
+const statusColumns: { status: TaskStatus; label: string; icon: ReactNode; emptyText: string; color: string }[] = [
+  { status: "queued", label: "Queued", icon: <Clock className="h-4 w-4" />, emptyText: "No queued tasks", color: "text-gray-500" },
+  { status: "running", label: "Running", icon: <Loader2 className="h-4 w-4 animate-spin" />, emptyText: "No active executions", color: "text-blue-500" },
+  { status: "passed", label: "Passed", icon: <CheckCircle2 className="h-4 w-4" />, emptyText: "No completed passing tasks yet", color: "text-green-500" },
+  { status: "failed", label: "Failed", icon: <XCircle className="h-4 w-4" />, emptyText: "No failed tasks", color: "text-red-500" },
+  { status: "needs_review", label: "Needs Review", icon: <Eye className="h-4 w-4" />, emptyText: "No tasks waiting for review", color: "text-amber-500" },
+];
 
 const primaryNav = [
   { label: "Search", shortcut: "⌘K", icon: Search },
@@ -56,88 +75,115 @@ export default function BoardPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("kanban");
 
   useEffect(() => {
     let active = true;
 
     const load = async () => {
       const result = await fetchTasks();
-      if (!active) {
-        return;
-      }
-
+      if (!active) return;
       setTasks(result.tasks);
       setMessage(result.message ?? null);
       setLoading(false);
     };
 
     void load();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
-
 
   const sortedTasks = useMemo(() => {
     return [...tasks]
       .map((task, index) => ({ task, index }))
-      .sort((left, right) => {
-        const delta = getSortValue(right.task.updatedAt) - getSortValue(left.task.updatedAt);
-        if (delta !== 0) {
-          return delta;
-        }
-
-        return left.index - right.index;
+      .sort((a, b) => {
+        const delta = getSortValue(b.task.updatedAt) - getSortValue(a.task.updatedAt);
+        return delta !== 0 ? delta : a.index - b.index;
       })
       .map(({ task }) => task);
   }, [tasks]);
 
+  const tasksByStatus = useMemo(() => {
+    const map: Record<TaskStatus, TaskRecord[]> = {
+      queued: [],
+      running: [],
+      passed: [],
+      failed: [],
+      needs_review: [],
+    };
+
+    for (const task of sortedTasks) {
+      map[task.status]?.push(task);
+    }
+
+    return map;
+  }, [sortedTasks]);
+
   const selectedTask = useMemo(
-    () => sortedTasks.find((task) => task.id === selectedTaskId) ?? null,
+    () => sortedTasks.find((t) => t.id === selectedTaskId) ?? null,
     [selectedTaskId, sortedTasks]
   );
 
+  useEffect(() => {
+    if (!selectedTaskId && sortedTasks.length > 0) {
+      setSelectedTaskId(sortedTasks[0].id);
+    }
+  }, [selectedTaskId, sortedTasks]);
+
   return (
     <>
-      <main className="board-shell min-h-screen text-[#f5f2ec]">
-        <div className="grid min-h-screen lg:h-screen lg:grid-cols-[252px_320px_minmax(0,1fr)]">
-          <aside className="flex flex-col border-b border-white/6 px-4 py-4 lg:border-b-0 lg:border-r lg:border-r-white/8">
+      <main className="min-h-screen bg-[#0c0c0e] text-white">
+        <div className="grid min-h-screen lg:grid-cols-[256px_1fr]">
+          {/* ── Sidebar ── */}
+          <aside className="flex flex-col overflow-hidden border-b border-white/[0.06] px-4 py-4 lg:border-b-0 lg:border-r lg:border-r-white/[0.06] lg:h-screen lg:overflow-y-auto scrollbar-thin">
             <div className="flex items-center justify-between gap-3 px-2 py-1">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-xs font-semibold text-white/80">
-                  P
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-violet-700 shadow-lg shadow-violet-500/20">
+                  <Zap className="h-4 w-4 text-white" />
                 </div>
-                <p className="truncate text-[15px] font-medium text-white/92">prince</p>
+                <div className="min-w-0">
+                  <p className="truncate text-[15px] font-semibold text-white/90">CodexFlow</p>
+                  <p className="truncate text-xs text-white/35">Board workspace</p>
+                </div>
               </div>
               <button
                 type="button"
-                className="rounded-md p-1.5 text-white/40 transition-colors hover:bg-white/[0.05] hover:text-white/80"
-                aria-label="Toggle workspace menu"
+                className="rounded-lg p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/70"
+                aria-label="Open command menu"
               >
-                <ChevronDown className="h-4 w-4" />
+                <Command className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="mt-4 space-y-1">
+            <div className="mt-5 space-y-0.5">
               {primaryNav.map(({ label, shortcut, icon: Icon }) => (
                 <button
                   key={label}
                   type="button"
                   onClick={label === "New Task" ? () => setIsCreateModalOpen(true) : undefined}
-                  className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-[15px] text-white/58 transition-colors hover:bg-white/[0.05] hover:text-white"
+                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-white/50 transition-colors hover:bg-white/[0.05] hover:text-white/90"
                 >
                   <span className="flex items-center gap-3">
                     <Icon className="h-4 w-4" />
                     <span>{label}</span>
                   </span>
                   {shortcut ? (
-                    <span className="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[11px] text-white/34">
+                    <span className="rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-white/30">
                       {shortcut}
                     </span>
                   ) : null}
                 </button>
               ))}
+            </div>
+
+            <div className="mt-6 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-white/25">Workspace</p>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-white/80">Engineering board</p>
+                  <p className="truncate text-xs text-white/30">Repo-aware task ops</p>
+                </div>
+                <ChevronDown className="h-4 w-4 text-white/25" />
+              </div>
             </div>
 
             <SidebarGroup title="Workspace">
@@ -152,191 +198,260 @@ export default function BoardPage() {
               ))}
             </SidebarGroup>
 
-            <div className="mt-auto border-t border-white/8 px-3 pt-5">
+            <div className="mt-auto border-t border-white/[0.06] px-3 pt-5">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#ece24b] text-xs font-semibold text-[#171612]">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">
                   P
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-[15px] font-medium text-white/90">prince pal</p>
-                  <p className="truncate text-sm text-white/42">pal265354@gmail.com</p>
+                  <p className="truncate text-sm font-medium text-white/85">prince pal</p>
+                  <p className="truncate text-xs text-white/35">pal265354@gmail.com</p>
                 </div>
               </div>
             </div>
           </aside>
 
-          <section className="flex min-h-[420px] flex-col border-b border-white/6 lg:border-b-0 lg:border-r lg:border-r-white/8">
-            <div className="border-b border-white/8 px-5 py-4">
-              <div className="flex items-center justify-between gap-4">
-                <h1 className="text-[24px] font-medium tracking-[-0.04em] text-white">Tasks</h1>
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="rounded-md p-2 text-white/52 transition-colors hover:bg-white/[0.05] hover:text-white"
-                  aria-label="Create task"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
+          {/* ── Main Content Area ── */}
+          {viewMode === "kanban" ? (
+            <section className="flex flex-col overflow-hidden">
+              {/* Top bar */}
+              <div className="border-b border-white/[0.06] px-6 py-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-xl font-bold tracking-tight text-white">Task Board</h1>
+                    <p className="mt-1 text-sm text-white/40">
+                      {sortedTasks.length} {sortedTasks.length === 1 ? "task" : "tasks"} · Kanban view
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <ViewToggle mode={viewMode} onChange={setViewMode} />
+                    <Button
+                      size="sm"
+                      onClick={() => setIsCreateModalOpen(true)}
+                      className="h-9 gap-2 bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-500/20"
+                    >
+                      <Plus className="h-4 w-4" />
+                      New Task
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {message ? (
-              <div className="border-b border-[#49361d] bg-[#261f16] px-5 py-3 text-sm text-[#e6ca9f]">{message}</div>
-            ) : null}
+              {message ? (
+                <div className="border-b border-amber-900/30 bg-amber-950/20 px-6 py-2.5 text-sm text-amber-200/80">{message}</div>
+              ) : null}
 
-            <div className="flex-1 overflow-y-auto px-2 py-2">
-              {loading ? (
-                <ListPlaceholder label="Loading task board…" />
-              ) : sortedTasks.length === 0 ? (
-                <div className="flex min-h-[420px] flex-col items-center justify-center px-8 text-center">
-                  <Sparkles className="h-10 w-10 text-white/16" />
-                  <h2 className="mt-6 text-[30px] font-medium tracking-[-0.05em] text-white/70">No workspace tasks yet</h2>
-                  <p className="mt-3 max-w-[260px] text-sm leading-6 text-white/42">
-                    Start a task to rank repo context, build the prompt preview, and collect verification evidence.
-                  </p>
-                  <Button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="mt-6 h-10 bg-white text-[#121214] shadow-none hover:translate-y-0 hover:bg-white/92"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Task
-                  </Button>
-                </div>
-              ) : (
-                <div>
-                  {sortedTasks.map((task) => (
-                    <TaskListItem
-                      key={task.id}
-                      task={task}
-                      selected={selectedTaskId === task.id}
-                      onSelect={() => setSelectedTaskId(task.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="flex min-h-[520px] flex-col">
-            {selectedTask ? (
-              <>
-                <div className="border-b border-white/8 px-7 py-6">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
+              {/* Kanban columns */}
+              <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
+                {loading ? (
+                  <div className="flex h-full items-center justify-center text-sm text-white/30">Loading tasks…</div>
+                ) : (
+                  <div className="flex h-full gap-4" style={{ minWidth: `${statusColumns.length * 280}px` }}>
+                    {statusColumns.map((col) => (
+                      <KanbanColumn
+                        key={col.status}
+                        column={col}
+                        tasks={tasksByStatus[col.status]}
+                        onSelectTask={(id) => {
+                          setSelectedTaskId(id);
+                          setViewMode("list");
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          ) : (
+            /* ── List + Detail View ── */
+            <div className="grid lg:grid-cols-[380px_1fr]">
+              <section className="flex flex-col border-b border-white/[0.06] lg:border-b-0 lg:border-r lg:border-r-white/[0.06] lg:h-screen lg:overflow-hidden">
+                <div className="border-b border-white/[0.06] px-5 py-4">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <MetaPill label={getTaskIdentifier(selectedTask.id)} />
-                        <StatusBadge task={selectedTask} />
-                        <MetaPill label={`Updated ${formatTaskTimestamp(selectedTask.updatedAt)}`} />
-                      </div>
-                      <h2 className="mt-5 text-[32px] font-medium tracking-[-0.05em] text-white">
-                        {selectedTask.title}
-                      </h2>
-                      <p className="mt-3 max-w-3xl text-sm leading-7 text-white/46">
-                        {selectedTask.contextSummary || selectedTask.prompt}
-                      </p>
+                      <h1 className="text-lg font-bold tracking-tight text-white">Tasks</h1>
+                      <p className="mt-1 text-sm text-white/40">{sortedTasks.length} tasks</p>
                     </div>
-                    <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/58">
-                      {getConfidenceLabel(selectedTask.score)}
+                    <div className="flex items-center gap-2">
+                      <ViewToggle mode={viewMode} onChange={setViewMode} />
+                      <Button
+                        size="sm"
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="h-8 gap-1.5 bg-violet-600 text-white hover:bg-violet-700"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        New
+                      </Button>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
-                  <div className="grid border-b border-white/6 xl:grid-cols-[1.05fr_0.95fr] xl:divide-x xl:divide-white/6">
-                    <DetailSection title="Prompt preview" eyebrow="Context">
-                      <p className="text-sm leading-7 text-white/72">
-                        {selectedTask.promptPreview || selectedTask.prompt}
+                {message ? (
+                  <div className="border-b border-amber-900/30 bg-amber-950/20 px-5 py-2.5 text-sm text-amber-200/80">{message}</div>
+                ) : null}
+
+                <div className="flex-1 overflow-y-auto scrollbar-thin">
+                  {loading ? (
+                    <ListPlaceholder label="Loading tasks…" />
+                  ) : sortedTasks.length === 0 ? (
+                    <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
+                      <Sparkles className="h-10 w-10 text-white/15" />
+                      <h2 className="mt-4 text-lg font-semibold text-white/70">No tasks yet</h2>
+                      <p className="mt-2 max-w-xs text-sm text-white/40">
+                        Create a task to get started with repo-aware AI operations.
                       </p>
-                    </DetailSection>
-                    <DetailSection title="Verification status" eyebrow="Checks">
-                      <div className="grid gap-3">
-                        <VerificationRow label="Lint" status={selectedTask.lintStatus} />
-                        <VerificationRow label="Tests" status={selectedTask.testStatus} />
-                        <VerificationRow
-                          label="Confidence"
-                          status={getConfidenceStatus(selectedTask.score)}
-                          value={selectedTask.score !== null ? `${selectedTask.score}/100` : "Pending"}
+                      <Button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="mt-4 h-9 bg-violet-600 text-white hover:bg-violet-700"
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Task
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-white/[0.04]">
+                      {sortedTasks.map((task) => (
+                        <TaskListItem
+                          key={task.id}
+                          task={task}
+                          selected={selectedTaskId === task.id}
+                          onSelect={() => setSelectedTaskId(task.id)}
                         />
-                      </div>
-                    </DetailSection>
-                  </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
 
-                  <div className="grid border-b border-white/6 xl:grid-cols-[1.05fr_0.95fr] xl:divide-x xl:divide-white/6">
-                    <DetailSection title="Selected files" eyebrow="Repo context">
-                      <div className="space-y-3">
-                        {selectedTask.selectedFiles.length > 0 ? (
-                          selectedTask.selectedFiles.slice(0, 6).map((file) => (
-                            <div key={file.path} className="rounded-2xl border border-white/8 bg-white/[0.025] px-4 py-3.5">
-                              <div className="flex items-center justify-between gap-4">
-                                <p className="truncate font-mono text-sm text-white/80">{file.path}</p>
-                                <span className="text-xs text-white/36">{file.score ?? "—"}</span>
-                              </div>
-                              {file.rationale ? (
-                                <p className="mt-2 text-sm leading-6 text-white/44">{file.rationale}</p>
-                              ) : null}
-                            </div>
-                          ))
-                        ) : (
-                          <EmptyInline label="No selected files captured yet." />
-                        )}
-                      </div>
-                    </DetailSection>
-                    <DetailSection title="Run notes" eyebrow="Execution">
-                      <div className="space-y-4">
-                        <KeyValueRow label="Execution mode" value={selectedTask.executionMode || "Task run"} />
-                        <KeyValueRow label="Repository" value={selectedTask.repoPath || "."} mono />
-                        <KeyValueRow label="Prompt confidence" value={getConfidenceLabel(selectedTask.score)} />
-                        {selectedTask.failureSignal ? (
-                          <div className="rounded-2xl border border-[#533033] bg-[#211417] px-4 py-3 text-sm text-[#f1b5b5]">
-                            <p className="font-medium text-[#ffd2d2]">{selectedTask.failureSignal.summary}</p>
-                            <p className="mt-2 leading-6 text-[#d9aaaa]">{selectedTask.failureSignal.detail}</p>
+              {/* Detail panel */}
+              <section className="flex flex-col overflow-y-auto lg:h-screen scrollbar-thin">
+                {selectedTask ? (
+                  <>
+                    <div className="border-b border-white/[0.06] px-6 py-5">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <MetaPill label={getTaskIdentifier(selectedTask.id)} />
+                            <StatusBadge task={selectedTask} />
                           </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap text-sm leading-7 text-white/50">
-                            {selectedTask.verificationNotes || selectedTask.logs || "No execution notes captured yet."}
+                          <h2 className="mt-3 text-xl font-bold tracking-tight text-white">
+                            {selectedTask.title}
+                          </h2>
+                          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">
+                            {selectedTask.contextSummary || selectedTask.prompt}
                           </p>
-                        )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
+                            <span className="text-xs text-white/50">Confidence</span>
+                            <span className="font-semibold text-white">{getConfidenceLabel(selectedTask.score)}</span>
+                          </div>
+                          <Link href={`/tasks/${selectedTask.id}`}>
+                            <Button size="sm" variant="outline" className="gap-1.5 border-white/[0.1] text-white/70 hover:bg-white/[0.06] hover:text-white">
+                              Full view
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
-                    </DetailSection>
-                  </div>
+                    </div>
 
-                  <div className="grid xl:grid-cols-[1.12fr_0.88fr] xl:divide-x xl:divide-white/6">
-                    <DetailSection title="Patch preview" eyebrow="Diff">
-                      <pre className="overflow-x-auto rounded-[24px] border border-white/8 bg-black/20 p-5 font-mono text-[12px] leading-6 text-[#c1c7d0]">
-                        {getPatchPreview(selectedTask)}
-                      </pre>
-                    </DetailSection>
-                    <DetailSection title="Verification evidence" eyebrow="Logs">
-                      <div className="space-y-4">
-                        <LogBlock title="Lint output" body={selectedTask.lintOutput} />
-                        <LogBlock title="Test output" body={selectedTask.testOutput} />
-                        <LogBlock title="Execution log" body={selectedTask.logs} />
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="grid divide-y divide-white/[0.06] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+                        <DetailSection title="Prompt" eyebrow="Context">
+                          <p className="text-sm leading-7 text-white/60">
+                            {selectedTask.promptPreview || selectedTask.prompt}
+                          </p>
+                        </DetailSection>
+                        <DetailSection title="Verification" eyebrow="Status">
+                          <div className="space-y-2">
+                            <VerificationRow label="Lint" status={selectedTask.lintStatus} />
+                            <VerificationRow label="Tests" status={selectedTask.testStatus} />
+                            <VerificationRow
+                              label="Confidence"
+                              status={getConfidenceStatus(selectedTask.score)}
+                              value={selectedTask.score !== null ? `${selectedTask.score}/100` : "Pending"}
+                            />
+                          </div>
+                        </DetailSection>
                       </div>
-                    </DetailSection>
+
+                      <div className="grid divide-y divide-white/[0.06] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+                        <DetailSection title="Files" eyebrow="Repo context">
+                          <div className="space-y-2">
+                            {selectedTask.selectedFiles.length > 0 ? (
+                              selectedTask.selectedFiles.slice(0, 5).map((file) => (
+                                <div key={file.path} className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <p className="truncate font-mono text-xs text-white/60">{file.path}</p>
+                                    {file.score && <span className="text-xs text-white/30">{file.score}</span>}
+                                  </div>
+                                  {file.rationale && (
+                                    <p className="mt-1.5 text-xs leading-5 text-white/40">{file.rationale}</p>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-xs text-white/30">No files selected</p>
+                            )}
+                          </div>
+                        </DetailSection>
+                        <DetailSection title="Execution" eyebrow="Details">
+                          <div className="space-y-2">
+                            <KeyValueRow label="Repository" value={selectedTask.repoPath || "."} mono />
+                            <KeyValueRow label="Mode" value={selectedTask.executionMode || "Task run"} />
+                            {selectedTask.failureSignal && (
+                              <div className="rounded-lg border border-red-900/30 bg-red-950/20 px-3 py-2.5 text-xs">
+                                <p className="font-medium text-red-300">{selectedTask.failureSignal.summary}</p>
+                                <p className="mt-1 text-red-200/60">{selectedTask.failureSignal.detail}</p>
+                              </div>
+                            )}
+                          </div>
+                        </DetailSection>
+                      </div>
+
+                      <div className="grid divide-y divide-white/[0.06] border-t border-white/[0.06] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+                        <DetailSection title="Diff" eyebrow="Patch">
+                          <pre className="overflow-x-auto rounded-lg border border-white/[0.06] bg-black/40 p-4 text-[11px] leading-5">
+                            {getPatchPreview(selectedTask).split("\n").map((line, i) => (
+                              <span
+                                key={i}
+                                className={
+                                  line.startsWith("+")
+                                    ? "block text-green-400"
+                                    : line.startsWith("-")
+                                      ? "block text-red-400"
+                                      : line.startsWith("@@")
+                                        ? "block text-blue-400"
+                                        : "block text-white/50"
+                                }
+                              >
+                                {line}
+                              </span>
+                            ))}
+                          </pre>
+                        </DetailSection>
+                        <DetailSection title="Logs" eyebrow="Output">
+                          <div className="space-y-2">
+                            <LogBlock title="Lint" body={selectedTask.lintOutput} />
+                            <LogBlock title="Tests" body={selectedTask.testOutput} />
+                          </div>
+                        </DetailSection>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+                    <Sparkles className="h-10 w-10 text-white/15" />
+                    <h2 className="mt-4 text-lg font-semibold text-white/60">Select a task</h2>
+                    <p className="mt-2 max-w-xs text-sm text-white/40">
+                      Pick a task from the list to view details, context, and verification results.
+                    </p>
                   </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-1 items-center justify-center px-8">
-                <div className="max-w-md text-center">
-                  <Sparkles className="mx-auto h-12 w-12 text-white/16" />
-                  <h2 className="mt-6 text-[34px] font-medium tracking-[-0.05em] text-white/70">
-                    Select a task to view details
-                  </h2>
-                  <p className="mt-3 text-sm leading-7 text-white/42">
-                    Review repo context, prompt previews, patch output, and verification evidence from one focused pane.
-                  </p>
-                  <Button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="mt-7 h-10 bg-white text-[#121214] shadow-none hover:translate-y-0 hover:bg-white/92"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Task
-                  </Button>
-                </div>
-              </div>
-            )}
-          </section>
+                )}
+              </section>
+            </div>
+          )}
         </div>
       </main>
 
@@ -345,11 +460,114 @@ export default function BoardPage() {
   );
 }
 
+/* ── Sub-components ── */
+
+function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (mode: ViewMode) => void }) {
+  return (
+    <div className="flex items-center rounded-lg border border-white/[0.08] bg-white/[0.03] p-0.5">
+      <button
+        type="button"
+        onClick={() => onChange("kanban")}
+        className={cn(
+          "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+          mode === "kanban" ? "bg-white/[0.1] text-white" : "text-white/40 hover:text-white/70"
+        )}
+        aria-label="Kanban view"
+      >
+        <FolderKanban className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("list")}
+        className={cn(
+          "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+          mode === "list" ? "bg-white/[0.1] text-white" : "text-white/40 hover:text-white/70"
+        )}
+        aria-label="List view"
+      >
+        <LayoutList className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function KanbanColumn({
+  column,
+  tasks,
+  onSelectTask,
+}: {
+  column: (typeof statusColumns)[number];
+  tasks: TaskRecord[];
+  onSelectTask: (id: string) => void;
+}) {
+  return (
+    <div className="flex w-[270px] shrink-0 flex-col rounded-xl border border-white/[0.06] bg-white/[0.02]">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className={column.color}>{column.icon}</span>
+          <span className="text-sm font-semibold text-white/80">{column.label}</span>
+        </div>
+        <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-xs font-medium text-white/40">
+          {tasks.length}
+        </span>
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 pb-2 scrollbar-thin">
+        {tasks.length === 0 ? (
+          <div className="flex h-32 items-center justify-center px-4 text-center">
+            <p className="text-xs text-white/25">{column.emptyText}</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {tasks.map((task) => (
+              <KanbanCard key={task.id} task={task} onSelect={() => onSelectTask(task.id)} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KanbanCard({
+  task,
+  onSelect,
+}: {
+  task: TaskRecord;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="w-full rounded-lg border border-white/[0.06] bg-white/[0.03] p-3 text-left transition-all duration-200 hover:border-violet-500/20 hover:bg-white/[0.06]"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-white/30">
+          {getTaskIdentifier(task.id)}
+        </span>
+        {task.score !== null && (
+          <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
+            {task.score}/100
+          </span>
+        )}
+      </div>
+      <h4 className="mt-2 text-sm font-medium leading-tight text-white/85">{task.title}</h4>
+      <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/40">
+        {task.contextSummary || task.prompt}
+      </p>
+      <div className="mt-3 flex items-center justify-between text-[10px] text-white/30">
+        <span>{task.selectedFiles.length} files</span>
+        <span>{formatTaskTimestamp(task.updatedAt)}</span>
+      </div>
+    </button>
+  );
+}
+
 function SidebarGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="mt-7">
-      <p className="mb-2 px-3 text-xs font-medium uppercase tracking-[0.2em] text-white/28">{title}</p>
-      <div className="space-y-1">{children}</div>
+    <div className="mt-6">
+      <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/20">{title}</p>
+      <div className="space-y-0.5">{children}</div>
     </div>
   );
 }
@@ -359,8 +577,8 @@ function SidebarItem({ label, icon, active = false }: { label: string; icon: Rea
     <button
       type="button"
       className={cn(
-        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] transition-colors",
-        active ? "bg-white/[0.07] text-white" : "text-white/58 hover:bg-white/[0.05] hover:text-white"
+        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors",
+        active ? "bg-violet-500/10 text-violet-300" : "text-white/45 hover:bg-white/[0.04] hover:text-white/80"
       )}
     >
       {icon}
@@ -383,24 +601,26 @@ function TaskListItem({
       type="button"
       onClick={onSelect}
       className={cn(
-        "w-full border-b border-white/6 px-4 py-4 text-left transition-colors last:border-b-0",
-        selected ? "bg-white/[0.06]" : "hover:bg-white/[0.035]"
+        "w-full px-4 py-3.5 text-left transition-all duration-150",
+        selected
+          ? "bg-violet-500/10 border-l-2 border-l-violet-500"
+          : "hover:bg-white/[0.03] border-l-2 border-l-transparent"
       )}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/26">{getTaskIdentifier(task.id)}</p>
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="font-mono text-[10px] uppercase tracking-wider text-white/30">{getTaskIdentifier(task.id)}</p>
             <StatusBadge task={task} />
           </div>
-          <h2 className="mt-3 text-[15px] font-medium text-white/88">{task.title}</h2>
+          <p className="text-[11px] text-white/30">{formatTaskTimestamp(task.updatedAt)}</p>
         </div>
-        <span className="text-xs text-white/32">{formatTaskTimestamp(task.updatedAt)}</span>
-      </div>
-      <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/42">{task.contextSummary || task.prompt}</p>
-      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-white/30">
-        <span>{task.selectedFiles.length} files</span>
-        <span>{task.repoPath || "."}</span>
+        <h3 className="text-sm font-semibold leading-tight text-white/90">{task.title}</h3>
+        <p className="line-clamp-2 text-xs leading-5 text-white/40">{task.contextSummary || task.prompt}</p>
+        <div className="flex items-center justify-between gap-3 text-[10px] text-white/25">
+          <span>{task.selectedFiles.length} files</span>
+          <span className="font-mono">{task.repoPath || "root"}</span>
+        </div>
       </div>
     </button>
   );
@@ -409,15 +629,23 @@ function TaskListItem({
 function StatusBadge({ task }: { task: TaskRecord }) {
   const meta = getTaskStatusMeta(task.status);
 
+  const colorMap: Record<string, { bg: string; text: string }> = {
+    passed: { bg: "bg-green-500/10", text: "text-green-400" },
+    running: { bg: "bg-blue-500/10", text: "text-blue-400" },
+    failed: { bg: "bg-red-500/10", text: "text-red-400" },
+    needs_review: { bg: "bg-amber-500/10", text: "text-amber-400" },
+    queued: { bg: "bg-white/[0.06]", text: "text-white/50" },
+  };
+
+  const colors = colorMap[task.status] || colorMap.queued;
+
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
-        task.status === "passed" && "bg-[#183424] text-[#7fe1a1]",
-        task.status === "running" && "bg-[#342a14] text-[#f4cb67]",
-        task.status === "failed" && "bg-[#371b1e] text-[#ff8c8c]",
-        task.status === "needs_review" && "bg-[#241d35] text-[#b8a0ff]",
-        task.status === "queued" && "bg-white/8 text-white/52"
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+        colors.bg,
+        colors.text,
+        task.status === "running" && "status-pulse"
       )}
     >
       {meta.label}
@@ -427,26 +655,18 @@ function StatusBadge({ task }: { task: TaskRecord }) {
 
 function MetaPill({ label }: { label: string }) {
   return (
-    <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-xs text-white/48">
+    <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-0.5 text-xs font-medium text-white/50">
       {label}
     </span>
   );
 }
 
-function DetailSection({
-  eyebrow,
-  title,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  children: ReactNode;
-}) {
+function DetailSection({ eyebrow, title, children }: { eyebrow: string; title: string; children: ReactNode }) {
   return (
-    <section className="px-7 py-7">
-      <p className="text-[11px] uppercase tracking-[0.22em] text-white/26">{eyebrow}</p>
-      <h3 className="mt-2 text-lg font-medium text-white/90">{title}</h3>
-      <div className="mt-5">{children}</div>
+    <section className="px-5 py-5">
+      <p className="text-[10px] uppercase tracking-widest text-white/30">{eyebrow}</p>
+      <h3 className="mt-1.5 text-sm font-semibold text-white/90">{title}</h3>
+      <div className="mt-3">{children}</div>
     </section>
   );
 }
@@ -461,19 +681,13 @@ function VerificationRow({
   value?: string;
 }) {
   const Icon = status === "passed" ? CheckCircle2 : status === "failed" ? XCircle : CircleDashed;
+  const iconColor = status === "passed" ? "text-green-400" : status === "failed" ? "text-red-400" : "text-white/25";
 
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.025] px-4 py-3.5">
-      <span className="text-sm text-white/54">{label}</span>
-      <span
-        className={cn(
-          "inline-flex items-center gap-2 text-sm",
-          status === "passed" && "text-[#86deaa]",
-          status === "failed" && "text-[#f19898]",
-          status === "pending" && "text-white/42"
-        )}
-      >
-        <Icon className="h-4 w-4" />
+    <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+      <span className="text-xs text-white/50 font-medium">{label}</span>
+      <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold", iconColor)}>
+        <Icon className="h-3.5 w-3.5" />
         {value ?? (status === "passed" ? "Passed" : status === "failed" ? "Failed" : "Pending")}
       </span>
     </div>
@@ -482,23 +696,19 @@ function VerificationRow({
 
 function KeyValueRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-2xl border border-white/8 bg-white/[0.025] px-4 py-3.5">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-white/28">{label}</p>
-      <p className={cn("mt-2 text-sm text-white/78", mono && "font-mono")}>{value}</p>
+    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-widest text-white/30">{label}</p>
+      <p className={cn("mt-1.5 text-sm text-white/60 font-medium", mono && "font-mono text-xs")}>{value}</p>
     </div>
   );
 }
 
-function EmptyInline({ label }: { label: string }) {
-  return <p className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-white/40">{label}</p>;
-}
-
 function LogBlock({ title, body }: { title: string; body?: string | null }) {
   return (
-    <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
-      <p className="text-[11px] uppercase tracking-[0.2em] text-white/26">{title}</p>
-      <pre className="mt-3 whitespace-pre-wrap font-mono text-[12px] leading-6 text-[#c1c7d0]">
-        {body?.trim() || "No output captured."}
+    <div className="rounded-lg border border-white/[0.06] bg-black/30 p-3">
+      <p className="text-[10px] uppercase tracking-widest text-white/30">{title}</p>
+      <pre className="mt-2 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-white/40">
+        {body?.trim() || "No output"}
       </pre>
     </div>
   );
@@ -506,16 +716,15 @@ function LogBlock({ title, body }: { title: string; body?: string | null }) {
 
 function ListPlaceholder({ label }: { label: string }) {
   return (
-    <div className="space-y-1 px-2 py-2">
-      {[0, 1, 2, 3].map((item) => (
-        <div key={item} className="animate-pulse border-b border-white/6 px-4 py-5 last:border-b-0">
-          <div className="h-3 w-20 rounded-full bg-white/8" />
-          <div className="mt-3 h-4 w-3/4 rounded-full bg-white/8" />
-          <div className="mt-4 h-3 w-full rounded-full bg-white/6" />
-          <div className="mt-2 h-3 w-2/3 rounded-full bg-white/6" />
+    <div className="space-y-1 px-2 py-3">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="space-y-2 px-2 py-3">
+          <div className="h-2.5 w-20 rounded bg-white/[0.06]" />
+          <div className="h-3.5 w-2/3 rounded bg-white/[0.05]" />
+          <div className="h-2 w-full rounded bg-white/[0.04]" />
         </div>
       ))}
-      <p className="pt-4 text-center text-sm text-white/34">{label}</p>
+      <p className="pt-2 text-center text-xs text-white/20">{label}</p>
     </div>
   );
 }
@@ -524,23 +733,16 @@ function getPatchPreview(task: TaskRecord) {
   if (!task.diff) {
     return task.patchSummary || "Patch preview will appear here once the task generates a diff artifact.";
   }
-
   return task.diff.split("\n").slice(0, 26).join("\n");
 }
 
 function getConfidenceStatus(score: number | null): "passed" | "failed" | "pending" {
-  if (score === null) {
-    return "pending";
-  }
-
+  if (score === null) return "pending";
   return score >= 70 ? "passed" : "failed";
 }
 
 function getSortValue(value?: string | null) {
-  if (!value) {
-    return 0;
-  }
-
+  if (!value) return 0;
   const parsed = new Date(value).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
 }

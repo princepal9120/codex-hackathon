@@ -1,38 +1,64 @@
-import SurfaceCard from "@/components/SurfaceCard";
-import { getConfidenceLabel, type TaskRecord } from "@/components/task-api";
+'use client';
+
+import type { TaskRecord } from "@/components/task-api";
 
 interface ScoreCardProps {
   task: TaskRecord;
 }
 
 export default function ScoreCard({ task }: ScoreCardProps) {
-  if (task.score === null && (task.status === "queued" || task.status === "running")) {
-    return null;
-  }
-
   const score = task.score ?? 0;
-  const barWidth = Math.max(6, Math.min(100, score));
-  const tone = score >= 80 ? "bg-[#277a46]" : score >= 60 ? "bg-[#c7932b]" : "bg-[#c96e6e]";
+  const percentage = Math.min(Math.max(score, 0), 100);
+
+  const getScoreColor = (s: number) => {
+    if (s >= 80) return { bar: "bg-green-500", text: "text-green-700", bg: "bg-green-50", border: "border-green-200" };
+    if (s >= 50) return { bar: "bg-amber-500", text: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" };
+    return { bar: "bg-red-500", text: "text-red-700", bg: "bg-red-50", border: "border-red-200" };
+  };
+
+  const colors = getScoreColor(score);
+
+  const breakdown = [
+    { label: "Patch generated", points: task.diff?.trim() ? 20 : 0, max: 20 },
+    { label: "Lint passed", points: task.lintStatus === "passed" ? 30 : 0, max: 30 },
+    { label: "Tests passed", points: task.testStatus === "passed" ? 40 : 0, max: 40 },
+    { label: "Relevant files", points: task.selectedFiles.length > 0 ? 10 : 0, max: 10 },
+  ];
 
   return (
-    <SurfaceCard eyebrow="Score" title="Confidence snapshot" description="A compact signal combining verification and run outcome into one quick read.">
-      <div className="flex items-end gap-3">
-        <span className="text-5xl font-semibold tracking-[-0.06em] text-[#1f1c17]">{task.score ?? "—"}</span>
-        <span className="pb-2 text-sm text-[#7f766a]">/100</span>
-      </div>
-      <div className="mt-4 h-2 rounded-full bg-[#ece5da]">
-        <div className={`h-2 rounded-full ${tone}`} style={{ width: `${barWidth}%` }} />
-      </div>
-      <p className="mt-4 text-sm leading-6 text-[#6f675d]">
-        {task.status === "passed"
-          ? "Verification cleared and the patch preview looks consistent."
-          : task.status === "failed"
-            ? "Execution failed before CodexFlow could produce a trustworthy result."
-            : task.status === "needs_review"
-              ? "The review artifact exists, but a human still needs to make the trust decision."
-              : "CodexFlow is still moving through the execution pipeline."}
+    <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg shadow-gray-900/5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">
+        Score
       </p>
-      <p className="mt-2 text-sm font-medium text-[#1f1c17]">{getConfidenceLabel(task.score)}</p>
-    </SurfaceCard>
+      <h3 className="mt-2 text-lg font-bold text-gray-900">Confidence score</h3>
+
+      <div className="mt-5 flex items-center gap-5">
+        <div className={`flex h-20 w-20 items-center justify-center rounded-2xl border ${colors.border} ${colors.bg}`}>
+          <span className={`text-3xl font-extrabold ${colors.text}`}>{score}</span>
+        </div>
+        <div className="flex-1">
+          <div className="h-3 overflow-hidden rounded-full bg-gray-100">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${colors.bar}`}
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+          <p className="mt-2 text-sm text-gray-500">
+            {score >= 80 ? "High confidence" : score >= 50 ? "Needs review" : "Low confidence"} — {score}/100
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-2 sm:grid-cols-2">
+        {breakdown.map((item) => (
+          <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+            <span className="text-xs text-gray-600">{item.label}</span>
+            <span className={`text-xs font-semibold ${item.points > 0 ? "text-green-600" : "text-gray-400"}`}>
+              {item.points}/{item.max}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

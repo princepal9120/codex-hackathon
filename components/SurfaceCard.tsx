@@ -1,53 +1,40 @@
-import { type ReactNode } from "react";
+'use client';
 
-import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
 
 interface SurfaceCardProps {
   eyebrow?: string;
-  title?: string;
+  title: string;
   description?: string;
-  action?: ReactNode;
-  children: ReactNode;
-  className?: string;
-  headerClassName?: string;
-  bodyClassName?: string;
-  tone?: "panel" | "soft" | "quiet";
+  children?: ReactNode;
+  tone?: "default" | "soft" | "quiet";
 }
-
-const toneClasses: Record<NonNullable<SurfaceCardProps["tone"]>, string> = {
-  panel: "surface-panel",
-  soft: "surface-soft",
-  quiet: "surface-quiet",
-};
 
 export default function SurfaceCard({
   eyebrow,
   title,
   description,
-  action,
   children,
-  className,
-  headerClassName,
-  bodyClassName,
-  tone = "panel",
+  tone = "default",
 }: SurfaceCardProps) {
-  const hasHeader = eyebrow || title || description || action;
+  const toneStyles = {
+    default: "border-gray-200 bg-white shadow-lg shadow-gray-900/5",
+    soft: "border-gray-200 bg-gray-50/80",
+    quiet: "border-gray-200 bg-gray-50",
+  };
 
   return (
-    <section className={cn("overflow-hidden rounded-[28px]", toneClasses[tone], className)}>
-      {hasHeader ? (
-        <div className={cn("border-b border-[#ece4d8] px-6 py-5 sm:px-7", headerClassName)}>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              {eyebrow ? <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c8377]">{eyebrow}</p> : null}
-              {title ? <h2 className="text-lg font-semibold tracking-[-0.03em] text-[#201c17]">{title}</h2> : null}
-              {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-[#6f675d]">{description}</p> : null}
-            </div>
-            {action ? <div className="shrink-0">{action}</div> : null}
-          </div>
-        </div>
-      ) : null}
-      <div className={cn("px-6 py-5 sm:px-7", bodyClassName)}>{children}</div>
+    <section className={`rounded-2xl border p-6 ${toneStyles[tone]}`}>
+      {eyebrow && (
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600">
+          {eyebrow}
+        </p>
+      )}
+      <h3 className="mt-2 text-lg font-bold text-gray-900">{title}</h3>
+      {description && (
+        <p className="mt-2 text-sm leading-6 text-gray-600">{description}</p>
+      )}
+      {children && <div className="mt-5">{children}</div>}
     </section>
   );
 }
