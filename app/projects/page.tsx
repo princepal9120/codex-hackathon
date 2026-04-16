@@ -1,9 +1,11 @@
 'use client';
 
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { FolderPlus, Layers, Loader2, Plus, Workflow } from 'lucide-react';
+import { ChevronLeft, FolderPlus, Github, Layers, Loader2, Plus, Workflow } from 'lucide-react';
 
+import { connectGitHub, fetchRepositories, isGitHubConnected, type GitHubRepository } from '@/components/github-api';
 import { createProject, fetchProjects, type ProjectRecord } from '@/components/project-api';
+import { formatTaskTimestamp } from '@/components/task-api';
 import Shell from '@/components/Shell';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -15,12 +17,18 @@ const initialForm = {
   description: '',
 };
 
+type SetupStep = 'unauthenticated' | 'repo-list' | 'configure';
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(initialForm);
+
+  const [setupStep, setSetupStep] = useState<SetupStep>('unauthenticated');
+  const [repos, setRepos] = useState<GitHubRepository[]>([]);
+  const [loadingRepos, setLoadingRepos] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -37,10 +45,38 @@ export default function ProjectsPage() {
         if (active) setLoading(false);
       });
 
+    if (isGitHubConnected()) {
+      setSetupStep('repo-list');
+      void loadRepositories();
+    }
+
     return () => {
       active = false;
     };
   }, []);
+
+  const loadRepositories = async () => {
+    setLoadingRepos(true);
+    try {
+      const data = await fetchRepositories();
+      setRepos(data);
+    } catch {
+      setError("Failed to fetch repositories.");
+    } finally {
+      setLoadingRepos(false);
+    }
+  };
+
+  const handleConnectGitHub = async () => {
+    setIsSubmitting(true);
+    try {
+      await connectGitHub();
+      setSetupStep('repo-list');
+      await loadRepositories();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const summary = useMemo(() => {
     return {
@@ -70,6 +106,7 @@ export default function ProjectsPage() {
       });
       setProjects((current) => [project, ...current]);
       setForm(initialForm);
+      setSetupStep('repo-list');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Failed to create project.');
     } finally {
@@ -93,23 +130,99 @@ export default function ProjectsPage() {
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto grid max-w-6xl gap-6 xl:grid-cols-[0.95fr_1.05fr]">
           <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Project setup</p>
-            <h2 className="mt-2 text-xl font-bold text-foreground">Add a project to your CodexFlow workspace</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Projects let operators connect a repo target with the issues, reports, and implementation tasks they want to manage in the kanban board.
-            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Import Project</p>
 
-            <div className="mt-6 space-y-5">
-              <Field label="Project name" helper="Used everywhere in the board and detail surfaces.">
-                <Input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Runtime reliability" />
-              </Field>
-              <Field label="Repository path" helper="Must stay inside the configured repository root.">
-                <Input value={form.repoPath} onChange={(event) => updateField('repoPath', event.target.value)} placeholder="." />
-              </Field>
-              <Field label="Description" helper="Optional context for operators and reviewers.">
-                <Textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Track issues, reports, and implementation work for runtime and sandbox reliability." />
-              </Field>
-            </div>
+            {setupStep === 'unauthenticated' && (
+              <div className="mt-2">
+                <h2 className="text-xl font-bold text-foreground">Connect Git Provider</h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Connect your GitHub account to easily import existing repositories into CodexFlow.
+                </p>
+                <div className="mt-8">
+                  <Button onClick={handleConnectGitHub} disabled={isSubmitting} className="w-full sm:w-auto gap-2">
+                    <Github className="h-4 w-4" />
+                    {isSubmitting ? 'Connecting…' : 'Continue with GitHub'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {setupStep === 'repo-list' && (
+              <div className="mt-2">
+                <h2 className="text-xl font-bold text-foreground">Import Git Repository</h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground mr-1">
+                  Select a repository to import into your workspace.
+                </p>
+
+                <div className="mt-6 divide-y divide-border rounded-[var(--radius)] border border-border">
+                  {loadingRepos ? (
+                    <div className="flex justify-center p-8 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    </div>
+                  ) : repos.map((repo) => (
+                    <div key={repo.id} className="flex items-center justify-between p-4 bg-card hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted">
+                          <Github className="h-4 w-4" />
+                        </div>
+                        <div className="grid gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-foreground">{repo.name}</span>
+                            {repo.private && (
+                              <span className="rounded-full border border-border bg-card px-2 py-px text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Private</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">{formatTaskTimestamp(repo.updatedAt)} • {repo.language || 'Unknown'}</span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setForm({ name: repo.name, repoPath: '.', description: repo.description || '' });
+                          setSetupStep('configure');
+                        }}
+                      >
+                        Import
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {setupStep === 'configure' && (
+              <div className="mt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-3 mb-4 h-8 gap-1 px-2 text-muted-foreground"
+                  onClick={() => setSetupStep('repo-list')}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <h2 className="text-xl font-bold text-foreground">Configure Project</h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Review and finalize project settings for <strong>{form.name}</strong>.
+                </p>
+
+                <div className="mt-6 space-y-5">
+                  <Field label="Project name" helper="Used everywhere in the board and detail surfaces.">
+                    <Input value={form.name} onChange={(event) => updateField('name', event.target.value)} placeholder="Runtime reliability" />
+                  </Field>
+                  <Field label="Repository path" helper="Must stay inside the configured repository root.">
+                    <Input value={form.repoPath} onChange={(event) => updateField('repoPath', event.target.value)} placeholder="." />
+                  </Field>
+                  <Field label="Description" helper="Optional context for operators and reviewers.">
+                    <Textarea value={form.description} onChange={(event) => updateField('description', event.target.value)} placeholder="Track issues, reports, and implementation work for runtime and sandbox reliability." />
+                  </Field>
+                  <Button className="w-full sm:w-auto mt-2" onClick={handleCreateProject} disabled={!form.name.trim() || isSubmitting}>
+                    {isSubmitting ? 'Importing…' : 'Import Project'}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {error ? (
               <div className="mt-5 rounded-[var(--radius)] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
